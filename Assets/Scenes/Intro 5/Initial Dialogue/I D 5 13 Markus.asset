@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f49fc90e46a3ac43ad7e5beaa8228f2, type: 3}
+  m_Name: I D 5 13 Markus
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueEntry
+  Who: Markus
+  What: Shit
+  WhoImage: {fileID: 0}
+  choiceEntry: {fileID: 0}
+  next: {fileID: 11400000, guid: aa33386c1908bc54fa5be5c1a4bee835, type: 2}
+  nextOnMouseClick: 0
+  timeToLive: 3
+  signalsAndTargets: []
+  onEnterMemoryChange: {fileID: 0}
+  audio: {fileID: 8300000, guid: e9ef02e0a9bb05442beb344f234e9f62, type: 3}

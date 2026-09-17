@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 350fa1d929b3aa34483ad844de0a9f98, type: 3}
+  m_Name: Intro 4 dialogues
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueEntrySequence
+  Entries:
+  - {fileID: 11400000, guid: 564214803037fa843bc257cda3598379, type: 2}
+  - {fileID: 11400000, guid: 8da5466ac5b04dd43855c53bb7e28c37, type: 2}
+  - {fileID: 11400000, guid: 02bc637336310894989a4c4d650cfdb7, type: 2}
+  - {fileID: 11400000, guid: 43aa91da2652d1643a1576dc06904985, type: 2}
+  - {fileID: 11400000, guid: e0411bcbc7168a742b7d19500932388c, type: 2}
+  - {fileID: 11400000, guid: 35d4cfc4fec670342ae9d735d355e512, type: 2}
+  - {fileID: 11400000, guid: 351cc79bd72b887409c06c534cde09d7, type: 2}
+  - {fileID: 11400000, guid: ef707e01f491d594faa11c7098618215, type: 2}
+  - {fileID: 11400000, guid: e000a6457abda644c98b1fd046d3799a, type: 2}
+  - {fileID: 11400000, guid: bf0c455078498744daa69d31834c1841, type: 2}
+  - {fileID: 11400000, guid: cef82f3304999344191f52fc5f9711e6, type: 2}

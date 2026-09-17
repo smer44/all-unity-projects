@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Anton SDF - Sunny Days
+  m_Shader: {fileID: 4800000, guid: fe393ace9b354375a9cb14cdbbc28be4, type: 3}
+  m_Parent: {fileID: 2100000, guid: 2a6ba9da3bd178143b8f0988e66a17d9, type: 2}
+  m_ModifiedSerializedProperties: 2
+  m_ValidKeywords:
+  - OUTLINE_ON
+  - UNDERLAY_ON
+  m_InvalidKeywords:
+  - BEVEL_ON
+  m_LightmapFlags: 5
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 28933816116536082, guid: 8a89fa14b10d46a99122fd4f73fca9a2, type: 2}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _FaceDilate: -0.08
+    - _OutlineSoftness: 0.037
+    - _OutlineWidth: 0.263
+    - _ScaleRatioA: 0.9
+    - _ScaleRatioB: 0.7875
+    - _ScaleRatioC: 0.85950005
+    - _ShaderFlags: 1
+    - _UnderlayOffsetX: 0.75
+    - _UnderlayOffsetY: -0.75
+    - _UnderlaySoftness: 0.1
+    - _WeightBold: 0.5
+    m_Colors:
+    - _FaceColor: {r: 0, g: 1.0085039, b: 2, a: 1}
+    - _OutlineColor: {r: 0, g: 0, b: 0, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

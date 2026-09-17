@@ -1,2 +1,2 @@
-# all-unity-projects
-several unity projects in one
+# Vertical-Slice
+Vertical Slice of the game having some simple scenes with my general purpose scripts.

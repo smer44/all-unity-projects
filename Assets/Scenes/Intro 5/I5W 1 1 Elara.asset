@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f49fc90e46a3ac43ad7e5beaa8228f2, type: 3}
+  m_Name: I5W 1 1 Elara
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueEntry
+  Who: Elara
+  What: Wow what was that?
+  WhoImage: {fileID: 0}
+  choiceEntry: {fileID: 0}
+  next: {fileID: 11400000, guid: 900ab0d34ebd0ae40acef24421f27778, type: 2}
+  nextOnMouseClick: 1
+  timeToLive: 0
+  signalsAndTargets: []
+  onEnterMemoryChange: {fileID: 11400000, guid: 97521524b5db50c489be5050bfe0d7fd, type: 2}
+  audio: {fileID: 8300000, guid: 33326823855d2da4689de085e4c4a02a, type: 3}

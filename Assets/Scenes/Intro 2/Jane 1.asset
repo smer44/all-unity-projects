@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f49fc90e46a3ac43ad7e5beaa8228f2, type: 3}
+  m_Name: Jane 1
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueEntry
+  Who: Captain Jane
+  What: Some good news at least. Has Elara exited the ship yet
+  WhoImage: {fileID: 0}
+  choiceEntry: {fileID: 0}
+  next: {fileID: 11400000, guid: 3c8bae0770822ac4184bf5427d918ec9, type: 2}
+  nextOnMouseClick: 0
+  timeToLive: 2
+  signalsAndTargets: []
+  onEnterMemoryChange: {fileID: 0}
+  audio: {fileID: 8300000, guid: e33fb7aef6612a54bb97a22bb4106ae8, type: 3}

@@ -1,0 +1,102 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSUpdateVelocity
+
+#define THREADS_X 64
+#define MAX_OTHER_PARTICLES 256
+
+StructuredBuffer<float2> _PositionsRead;
+RWStructuredBuffer<float2> _PositionsWrite;
+StructuredBuffer<int>    _Types;
+
+// Flattened matrix:
+// _AttractionMatrix[selfType * _TypeCount + otherType]
+
+StructuredBuffer<float>  _AttractionMatrix;
+
+// Velocity is modified by this shader.
+RWStructuredBuffer<float2> _Velocities;
+
+int   _ParticleCount;
+int   _TypeCount;
+
+float _DeltaTime;
+float _DeltaTimeScale;
+
+float _ForceScale;
+float _Damping;
+
+float _MinDistance;
+float _MaxDistance;
+float _Softening;
+
+
+
+
+[numthreads(THREADS_X, 1, 1)]
+void CSUpdateVelocityAndPosition (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    uint pCount = (uint)_ParticleCount;
+    if (i >= pCount)
+        return;
+        
+    float2 selfPos = _Positions[i];
+    int selfType = _Types[i];
+
+    float2 totalForce = float2(0.0, 0.0);
+
+    uint otherCount = min(pCount, (uint)MAX_OTHER_PARTICLES);
+
+    for (uint j = 0; j < otherCount; j++){
+
+        if (j == i)
+            continue;
+            
+        float2 otherPos = _PositionsRead[j];
+        int otherType = _Types[j];
+
+        float2 delta = otherPos - selfPos;
+
+        float distSq = dot(delta, delta);
+
+        float dist = sqrt(distSq);
+
+        if (dist < _MinDistance || dist > _MaxDistance)
+            continue;
+            
+        float2 dir = delta / max(dist, 0.0001);
+
+        int matrixIndex = selfType * _TypeCount + otherType;
+
+        float coefficient = _AttractionMatrix[matrixIndex];
+
+        // Inverse-square-like falloff, softened to avoid explosions.
+
+        float falloff = 1.0 / max(distSq, _Softening);
+
+        // Positive coefficient attracts toward other particle.
+        // Negative coefficient repels away from other particle.
+        float forceMagnitude = coefficient * falloff * _ForceScale;
+        
+        totalForce += dir * forceMagnitude;
+
+
+    }
+
+    float dt = _DeltaTime * _DeltaTimeScale;
+
+    float2 velocity = _Velocities[i];
+
+    velocity += totalForce * dt;
+
+    // Simple damping to prevent infinite acceleration.
+
+    velocity *= max(0.0, 1.0 - _Damping * dt);
+    float2 newPosition = selfPos + velocity * dt;
+
+    _Velocities[i] = velocity;
+    _PositionsWrite[i] = newPosition;
+    
+}
+
+
