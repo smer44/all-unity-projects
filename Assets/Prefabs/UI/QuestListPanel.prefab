@@ -13,10 +13,8 @@ GameObject:
   - component: {fileID: 4191208204119582511}
   - component: {fileID: 9032859979098161170}
   - component: {fileID: 2049534048834112933}
-  - component: {fileID: 7139548831700025101}
-  - component: {fileID: 7139548831700025102}
   m_Layer: 5
-  m_Name: InventoryPanel
+  m_Name: QuestListPanel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -38,9 +36,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -288.5, y: -179.5}
-  m_SizeDelta: {x: 493.6585, y: 301.6417}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -24, y: -24}
+  m_SizeDelta: {x: 440, y: 20}
+  m_Pivot: {x: 1, y: 1}
 --- !u!222 &5164522694848792938
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -88,21 +86,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 4339079609772634995}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 05690cfbd26d87346b184687eb878da4, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GridLayoutGroup
+  m_EditorClassIdentifier: Assembly-CSharp::PackedBox
   m_Padding:
     m_Left: 10
     m_Right: 10
     m_Top: 10
     m_Bottom: 10
   m_ChildAlignment: 0
-  m_StartCorner: 0
-  m_StartAxis: 0
-  m_CellSize: {x: 88, y: 88}
-  m_Spacing: {x: 8, y: 8}
-  m_Constraint: 1
-  m_ConstraintCount: 5
+  packingMode: 0
+  widthMode: 0
+  heightMode: 1
+  spacing: 12
+  normalizeWeightedOverflow: 1
+  respectChildMinSize: 1
 --- !u!114 &2049534048834112933
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -112,38 +110,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 4339079609772634995}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1f5bab607d08fdf42ba60b8fd8a7a6e9, type: 3}
+  m_Script: {fileID: 11500000, guid: ba37664e4a884a429c6a8b5cd60c6b87, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GridInventoryUIController
+  m_EditorClassIdentifier: Assembly-CSharp::QuestListUIController
   inventoryOfUnit: {fileID: 0}
-  gridInventoryPanel: {fileID: 7139548831700025101}
---- !u!114 &7139548831700025101
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4339079609772634995}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2262fe9ab48c4f2f9a5f942ad1134f08, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GridUI
-  gridItemPrefab: {fileID: 11400001, guid: 40775f8c2e084d669974c2a320b40d9d, type: 3}
-  panel: {fileID: 7956741190527017950}
-  xcells: 5
-  ycells: 3
---- !u!114 &7139548831700025102
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4339079609772634995}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
-  m_HorizontalFit: 2
-  m_VerticalFit: 2
+  questListPanel: {fileID: 9032859979098161170}
+  questEntryPrefab: {fileID: 4527145367570845043, guid: bcae678245cd4973a9c2923cc21301c8, type: 3}
+

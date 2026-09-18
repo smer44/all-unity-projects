@@ -1,9 +1,7 @@
-using System;
 using UnityEngine;
 
-[Serializable]
-public class InventoryEntry
+[CreateAssetMenu(fileName = "InventoryEntry", menuName = "Inventory/Entry")]
+public class InventoryEntry : AbstractMemoryEntry
 {
-    public string key;
     public Sprite sprite;
 }

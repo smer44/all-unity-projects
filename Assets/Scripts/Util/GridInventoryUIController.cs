@@ -4,9 +4,12 @@ public sealed class GridInventoryUIController : AbstractInventoryUIController
 {
     [SerializeField] private GridUI gridInventoryPanel;
 
-    public override bool AddInventoryEntry(InventoryEntry entry)
+    protected override string MemoryPrefix => MemoryForUnitOfInventory.inventoryPrefix;
+
+    public override bool AddInventoryEntry(AbstractMemoryEntry entry)
     {
-        return gridInventoryPanel != null && gridInventoryPanel.AddInventoryEntry(entry);
+        return entry is InventoryEntry inventoryEntry && inventoryEntry != null
+            && gridInventoryPanel != null && gridInventoryPanel.AddInventoryEntry(inventoryEntry);
     }
 
     public override void ClearInventoryPanel()

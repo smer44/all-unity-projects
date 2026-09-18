@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9db76dbd8ea7439fb4fd8e5a96553f12, type: 3}
+  m_Name: FoodRatio
+  m_EditorClassIdentifier: Assembly-CSharp::InventoryEntry
+  key: FoodRatio
+  sprite: {fileID: 21300000, guid: 62e5afb556bce72489d021c6354be0bf, type: 3}

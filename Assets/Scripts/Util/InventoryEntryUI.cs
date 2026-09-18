@@ -8,17 +8,15 @@ public sealed class InventoryEntryUI : MonoBehaviour
     private Image entryImage;
     private InventoryEntry entry;
 
-    public InventoryEntry Entry
-    {
-        get => entry;
-        set
-        {
-            entry = value;
-            if (entryImage == null)
-                entryImage = GetComponent<Image>();
+    public InventoryEntry Entry => entry;
 
-            entryImage.sprite = entry?.sprite;
-            entryImage.preserveAspect = true;
-        }
+    public void SetInventoryEntry(InventoryEntry entry)
+    {
+        this.entry = entry;
+        if (entryImage == null)
+            entryImage = GetComponent<Image>();
+
+        entryImage.sprite = entry != null ? entry.sprite : null;
+        entryImage.preserveAspect = true;
     }
 }

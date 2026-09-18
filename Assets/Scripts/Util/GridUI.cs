@@ -49,7 +49,7 @@ public sealed class GridUI : MonoBehaviour
             {
                 InventoryEntryUI cell = Instantiate(gridItemPrefab, panel, false);
                 cell.name = $"Cell ({i}, {j})";
-                cell.Entry = null;
+                cell.SetInventoryEntry(null);
                 cells[i, j] = cell;
             }
         }
@@ -69,13 +69,14 @@ public sealed class GridUI : MonoBehaviour
         if (!Initialize() || !IsInBounds(i, j))
             return false;
 
-        cells[i, j].Entry = entry;
+        cells[i, j].SetInventoryEntry(entry);
         return true;
     }
 
     /// <summary>Fills the first empty cell, left to right, then top to bottom.</summary>
     public bool AddInventoryEntry(InventoryEntry entry)
     {
+        Debug.Log($"GridUI : Adding inventory entry {entry}");
         if (entry == null || !Initialize())
             return false;
 
@@ -86,7 +87,7 @@ public sealed class GridUI : MonoBehaviour
                 if (cells[i, j].Entry != null)
                     continue;
 
-                cells[i, j].Entry = entry;
+                cells[i, j].SetInventoryEntry(entry);
                 return true;
             }
         }
@@ -100,7 +101,7 @@ public sealed class GridUI : MonoBehaviour
             return;
 
         foreach (InventoryEntryUI cell in cells)
-            cell.Entry = null;
+            cell.SetInventoryEntry(null);
     }
 
     private bool IsInBounds(int i, int j)

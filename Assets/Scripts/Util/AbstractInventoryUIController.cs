@@ -2,8 +2,10 @@ using UnityEngine;
 
 public abstract class AbstractInventoryUIController : MonoBehaviour
 {
-    [SerializeField] private InventoryEntry[] inventoryEntries;
+    [SerializeField] private InventoryOfUnit inventoryOfUnit;
     private bool hasWarnedMissingMemoryBehaviour;
+    
+    protected abstract string MemoryPrefix { get; }
 
     protected virtual void Start()
     {
@@ -40,47 +42,41 @@ public abstract class AbstractInventoryUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Rebuilds the inventory UI from the current MemoryBehaviour values.
-    /// Any entry whose configured key exists and has a non-zero value is displayed.
+    /// Displays the assigned unit's memory list. Subclasses choose the list prefix
+    /// and which entry types they can display.
     /// </summary>
     public void RefreshInventoryDisplay()
     {
         ClearInventoryPanel();
 
-        if (inventoryEntries == null)
+        if (inventoryOfUnit == null || string.IsNullOrWhiteSpace(inventoryOfUnit.inventoryKey))
         {
             return;
         }
+        var memoryBehaviour = MemoryBehaviour.Instance;
+        if (memoryBehaviour == null || memoryBehaviour.StoryMemory == null)
+            return;
 
-        for (int i = 0; i < inventoryEntries.Length; i++)
+        string listKey = MemoryPrefix + inventoryOfUnit.inventoryKey;
+        var lists = memoryBehaviour.StoryMemory.memoryForUnitDict;
+        if (lists == null || !lists.TryGetValue(listKey, out EntryListForUnit list)
+            || list == null || list.entries == null)
+            return;
+
+        foreach (AbstractMemoryEntry entry in list.entries)
         {
-            InventoryEntry entry = inventoryEntries[i];
-            if (entry == null || string.IsNullOrWhiteSpace(entry.key))
-            {
-                continue;
-            }
-
-            if (!MemoryBehaviour.TryGet(entry.key, out int value) || value == 0)
-            {
-                continue;
-            }
-
-            if (!AddInventoryEntry(entry))
-            {
-                Debug.LogWarning($"{GetType().Name} could not display inventory entry '{entry.key}'.", this);
-                break;
-            }
+            if (entry != null)
+                AddInventoryEntry(entry);
         }
     }
 
     public abstract void ClearInventoryPanel();
 
-    public abstract bool AddInventoryEntry(InventoryEntry entry);
+    public abstract bool AddInventoryEntry(AbstractMemoryEntry entry);
 
     private void HandleMemoryChanged(string key, int _)
     {
         RefreshInventoryDisplay();
         MemoryBehaviour.LogMemoryContents();
-
     }
 }

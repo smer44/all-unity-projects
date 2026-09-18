@@ -2118,6 +2118,7 @@ GameObject:
   - component: {fileID: 3509162150898622482}
   - component: {fileID: 2487131916403282659}
   - component: {fileID: 6672074366817874616}
+  - component: {fileID: 2119583494368566795}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -2157,6 +2158,7 @@ MonoBehaviour:
   animator: {fileID: 8616770768548595982}
   directionPointer: {fileID: 0}
   buttonControls: {fileID: 11400000, guid: 888d5be600d315240b2a36ef2932501a, type: 2}
+  visualsRotationController: {fileID: 0}
   upperBodyVisualsController: {fileID: 6390189045729912601}
   visualsPivot: {fileID: 7833689862064445450}
   verticalRotationBones:
@@ -2169,12 +2171,10 @@ MonoBehaviour:
   minVerticalSpeed: -200
   maxVerticalSpeed: 200
   moveAndSlideIterations: 4
-  rotationSpeed: 5
   JumpImpulse: 5
   BattleReady: 1
   aerialJumpAmount: 1
   displacementApplyMode: 0
-  displacementInertiaLerpQuotient: 0.35
   localVerticalSpeedAccumulator: 0
   isJumpEnabled: 0
   skin: 0.02
@@ -2305,6 +2305,21 @@ MonoBehaviour:
   givenRenderer: {fileID: 1778741298101362243}
   damageColor: {r: 1, g: 0, b: 0, a: 1}
   damageColorTime: 0.2
+--- !u!114 &2119583494368566795
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8256452486073622322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cdb837de30c9465db925457afc68abc8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InventoryOfUnit
+  inventoryEntries:
+  - {fileID: 11400000, guid: 541d1b4daf6e5d749ac83f13d1843b34, type: 2}
+  - {fileID: 11400000, guid: e7e338ee13ab0824da4e684d0f594363, type: 2}
 --- !u!1 &8381193946325581663
 GameObject:
   m_ObjectHideFlags: 0
