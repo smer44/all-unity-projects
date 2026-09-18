@@ -60,14 +60,14 @@
         "*.asset": "yaml",
         "*.meta": "yaml",
         "*.prefab": "yaml",
-        "*.unity": "yaml",
+        "*.unity": "yaml"
     },
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.patterns": {
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "VerticalSliceBackup.slnx",
+    "dotnet.defaultSolution": "all-unity-projects.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false,
     "workbench.colorCustomizations": {
         "activityBar.background": "#3E253D",
