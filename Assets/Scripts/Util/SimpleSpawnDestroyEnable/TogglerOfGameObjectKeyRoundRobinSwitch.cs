@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class ActiveGameObjectKeyRoundRobinSwitch : ActiveGameObjectSwitch
+public class TogglerOfGameObjectKeyRoundRobinSwitch : TogglerOfGameObjectSwitch
 {
     [SerializeField] private Key key;
 

@@ -385,7 +385,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: abf9cebc2c8b41d6b1054c6458ff08f3, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ActiveGameObjectKeyRoundRobinSwitch
+  m_EditorClassIdentifier: Assembly-CSharp::TogglerOfGameObjectKeyRoundRobinSwitch
   gameObjects:
   - {fileID: 2906854604778794592}
   - {fileID: 4067590443357291151}

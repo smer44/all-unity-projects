@@ -36,7 +36,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Collider playerCollider;
 
 
-    [SerializeField] private ActiveGameObjectKeySwitch handWeaponSwitch;
+    [SerializeField] private TogglerOfGameObjectKeySwitch handWeaponSwitch;
     //[SerializeField] public float moveSpeed = 7f;
     //[SerializeField] public float JumpMoveSpeed = 2f;
     [SerializeField] private float gravity = -9.81f;
@@ -52,6 +52,10 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField] private bool BattleReady = false;
     [SerializeField] private int aerialJumpAmount = 1;
+    [SerializeField, Min(0f)] private float flyingMoveAcceleration = 40f;
+    public float FlyingMoveAcceleration => flyingMoveAcceleration;
+    [SerializeField, Min(0f)] private float flyingDashLockDuration = 1.5f;
+    public float FlyingDashLockDuration => flyingDashLockDuration;
     [SerializeField] private DisplacementApplyMode displacementApplyMode = DisplacementApplyMode.Simple;
     public DisplacementApplyMode CurrentDisplacementApplyMode => displacementApplyMode;
 
@@ -80,12 +84,14 @@ public class PlayerController : MonoBehaviour
     public SwimMoveState SwimMoveState { get; private set; }
     public FlyingIdleState FlyingIdleState { get; private set; }
     public FlyingMoveState FlyingMoveState { get; private set; }
+    public FlyingDashState FlyingDashState { get; private set; }
     public AerialEvadeState AerialEvadeState { get; private set; }
     public AerialEvadeDownwardsState AerialEvadeDownwardsState { get; private set; }
 
     public bool IsAerialEvading => currentState is AerialEvadeState;
     public bool IsFlyingMoving => currentState is FlyingMoveState;
-    public bool IsFlying => currentState is FlyingIdleState || currentState is FlyingMoveState || IsAerialEvading;
+    public bool IsFlyingDashing => currentState is FlyingDashState;
+    public bool IsFlying => currentState is FlyingIdleState || IsFlyingMoving || IsFlyingDashing || IsAerialEvading;
     public bool IsTargeted => visualsRotationController != null && visualsRotationController.IsTargeted;
     public bool IsAiming => PlayerCameraController != null
         && (PlayerCameraController.CurrentState is FirstPersonCameraState
@@ -124,6 +130,7 @@ public class PlayerController : MonoBehaviour
     public Vector2 MoveInputRotated { get; private set; }
     public Vector3 MoveInputRaw3D { get; private set; }
     public Vector3 MoveInputRotated3D { get; private set; }
+    public Vector3 FlyingMoveFacingDirection { get; private set; }
     // World velocity in units/second, retained between aerial states and corrected
     // by the collision solver after each physics step.
     public Vector3 FlyingVelocity { get; private set; }
@@ -147,7 +154,7 @@ public class PlayerController : MonoBehaviour
     //public Rigidbody PlayerBody => playerBody;
     public CameraController PlayerCameraController => directionPointer as CameraController;
     public AbstractUnitControls ButtonControls => buttonControls;
-    public ActiveGameObjectKeySwitch HandWeaponSwitch => handWeaponSwitch;
+    public TogglerOfGameObjectKeySwitch HandWeaponSwitch => handWeaponSwitch;
     public PlayerVisualsRotationController VisualsRotationController => visualsRotationController;
     public UpperBodyVisualsController UpperBodyVisualsController => upperBodyVisualsController;
     public Transform Direction => GetFacingDirectionTransform();
@@ -174,7 +181,7 @@ public class PlayerController : MonoBehaviour
 
         if (handWeaponSwitch == null)
         {
-            handWeaponSwitch = GetComponentInChildren<ActiveGameObjectKeySwitch>(true);
+            handWeaponSwitch = GetComponentInChildren<TogglerOfGameObjectKeySwitch>(true);
         }
 
         if (buttonControls == null)
@@ -226,6 +233,7 @@ public class PlayerController : MonoBehaviour
         SwimMoveState = new SwimMoveState(this);
         FlyingIdleState = new FlyingIdleState(this);
         FlyingMoveState = new FlyingMoveState(this);
+        FlyingDashState = new FlyingDashState(this);
         AerialEvadeState = new AerialEvadeState(this);
         AerialEvadeDownwardsState = new AerialEvadeDownwardsState(this);
 
@@ -266,6 +274,7 @@ public class PlayerController : MonoBehaviour
         buttonControls?.UpdateControls(Time.deltaTime);
         UpdateRunWalkMode();
         UpdateFlightToggle();
+        UpdateFlyingDash();
         //camera controller does update by its own.
 
         GizmoDisplayer.DebugHalfCircleGismo(
@@ -615,7 +624,7 @@ public class PlayerController : MonoBehaviour
 
         bool wasFlying = IsFlying;
         currentState?.OnExit();
-        if (newState != FlyingIdleState && newState != FlyingMoveState)
+        if (newState != FlyingIdleState && newState != FlyingMoveState && newState != FlyingDashState)
         {
             flyingAttackAnimationName = null;
         }
@@ -649,7 +658,23 @@ public class PlayerController : MonoBehaviour
 
         if (buttonControls != null && buttonControls.WasFlightTogglePressed())
         {
+            if (IsFlyingDashing && FlyingDashState.IsDirectionLocked)
+                return;
+
             SetState(IsFlying ? (AbstractPlayerState)IdleState : FlyingIdleState);
+        }
+    }
+
+    private void UpdateFlyingDash()
+    {
+        if ((currentState == FlyingIdleState || currentState == FlyingMoveState)
+            && buttonControls != null && buttonControls.WasFlyingDashPressed())
+        {
+            UpdateFlyingMoveInput();
+            // Space counts as active flight even if pressed in the same frame as dash.
+            // Otherwise, hovering retains its backwards dash entry.
+            FlyingDashState.Begin(currentState == FlyingIdleState && MoveInputRaw3D.y == 0f
+                ? Vector3.back : MoveInputRaw3D);
         }
     }
 
@@ -697,9 +722,11 @@ public class PlayerController : MonoBehaviour
 
     public void UpdateFlyingMoveInput()
     {
-        MoveInputRaw = GetMove2D();
-        MoveInputRaw3D = new Vector3(MoveInputRaw.x, 0f, MoveInputRaw.y);
-        MoveInputRotated3D = CameraFacingCalc.RotateFlyingInput(MoveInputRaw, Direction);
+        MoveInputRaw3D = buttonControls != null ? buttonControls.GetFlyingMove3D() : Vector3.zero;
+        MoveInputRaw = new Vector2(MoveInputRaw3D.x, MoveInputRaw3D.z);
+        MoveInputRotated3D = CameraFacingCalc.RotateFlyingInput(MoveInputRaw3D, Direction);
+        // Cache camera-relative WASD separately so Space affects motion, not moving-flight facing.
+        FlyingMoveFacingDirection = CameraFacingCalc.RotateFlyingInput(MoveInputRaw, Direction);
     }
 
 

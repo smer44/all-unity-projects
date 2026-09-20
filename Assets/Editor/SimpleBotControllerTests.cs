@@ -14,7 +14,7 @@ public class SimpleBotControllerTests
     private PlayerController bot;
     private SimpleBotController sourceControls;
     private SimpleBotController controls;
-    private ActiveGameObjectKeySwitch weapons;
+    private TogglerOfGameObjectKeySwitch weapons;
     private TargetSelector selector;
     private PlayerVisualsRotationController visuals;
     private LookAtPointer pointer;
@@ -34,7 +34,7 @@ public class SimpleBotControllerTests
         bot = botObject.AddComponent<PlayerController>();
         bot.visualsPivot = Child("Visuals", bot.transform).transform;
         var weaponPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Player/HandWeaponSwitch.prefab");
-        weapons = Object.Instantiate(weaponPrefab, bot.visualsPivot).GetComponent<ActiveGameObjectKeySwitch>();
+        weapons = Object.Instantiate(weaponPrefab, bot.visualsPivot).GetComponent<TogglerOfGameObjectKeySwitch>();
         selector = Child("TargetSelector", bot.transform).AddComponent<TargetSelector>();
         SetField(selector, "rotationController", visuals);
         SetField(selector, "highlightSelection", false);
@@ -234,8 +234,8 @@ public class SimpleBotControllerTests
             var players = scene.GetRootGameObjects().SelectMany(obj => obj.GetComponentsInChildren<PlayerController>(true));
             var enemy = players.Single(player => player.name == "Bot");
             var human = players.Single(player => player.name == "Player");
-            var enemyWeapons = enemy.GetComponentInChildren<ActiveGameObjectKeySwitch>(true);
-            var humanWeapons = human.GetComponentInChildren<ActiveGameObjectKeySwitch>(true);
+            var enemyWeapons = enemy.GetComponentInChildren<TogglerOfGameObjectKeySwitch>(true);
+            var humanWeapons = human.GetComponentInChildren<TogglerOfGameObjectKeySwitch>(true);
             Assert.That(enemyWeapons, Is.Not.Null);
             Assert.That(enemyWeapons.transform.IsChildOf(enemy.animator.transform), Is.True);
             Assert.That(enemyWeapons.transform.parent.name, Is.EqualTo(humanWeapons.transform.parent.name));

@@ -4,9 +4,9 @@ public class FlyingMoveState : AbstractPlayerState
 {
     public override bool AllowsAiming => true;
 
-    public const float BasicAcceleration = 80f;
+    public const float MaxFlyingSpeed = 50f;
 
-    public const float MaxFlyingSpeed = 100f;
+    public const string AnimationName = "FlyingMovev2";
 
     public FlyingMoveState(PlayerController controller) : base(controller)
     {
@@ -17,7 +17,7 @@ public class FlyingMoveState : AbstractPlayerState
         Controller.UpdateAiming();
         Controller.SetFlyingVelocity(Vector3.ClampMagnitude(Controller.FlyingVelocity, MaxFlyingSpeed));
         Controller.ResetAerialJumpCounter();
-        Controller.PlayFlyingLocomotionAnimation("FlyingMove");
+        Controller.PlayFlyingLocomotionAnimation(AnimationName);
     }
 
     public override void Update()
@@ -30,13 +30,13 @@ public class FlyingMoveState : AbstractPlayerState
         Controller.UpdateFlyingMoveInput();
         if (Controller.IsEvadeModifierPressed())
         {
-            Controller.SetState(Controller.MoveInputRaw != Vector2.zero
+            Controller.SetState(Controller.MoveInputRaw3D != Vector3.zero
                 ? (AbstractPlayerState)Controller.AerialEvadeState
                 : Controller.AerialEvadeDownwardsState);
             return;
         }
 
-        if (Controller.MoveInputRaw == Vector2.zero)
+        if (Controller.MoveInputRaw3D == Vector3.zero)
         {
             Controller.SetState(Controller.FlyingIdleState);
             // Begin coasting in this physics step, without a frame of zero motion.
@@ -46,7 +46,7 @@ public class FlyingMoveState : AbstractPlayerState
 
         Controller.UpdateFlyingAttackAnimation("FlyingMove");
 
-        float acceleration = BasicAcceleration *
+        float acceleration = Controller.FlyingMoveAcceleration *
             Mathf.Clamp01(1f - Controller.FlyingVelocity.magnitude / MaxFlyingSpeed);
         // Inertia mode interprets input * acceleration as world acceleration.
         Controller.MoveWASDKinematic(Controller.MoveInputRotated3D, acceleration);

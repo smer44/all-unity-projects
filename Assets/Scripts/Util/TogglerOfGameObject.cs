@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public sealed class GameObjectActivator : MonoBehaviour
+public class TogglerOfGameObject : MonoBehaviour
 {
     [SerializeField] private GameObject targetObject;
     [SerializeField] private bool disableOnStart;
@@ -14,16 +14,15 @@ public sealed class GameObjectActivator : MonoBehaviour
         }
     }
 
-    public void EnableTargetObject()
+    public virtual void EnableTargetObject()
     {
         SetTargetActive(true);
     }
 
-    public void DisableTargetObject()
+    public virtual void DisableTargetObject()
     {
         SetTargetActive(false);
     }
-
     public void ToggleTargetObject()
     {
         GameObject target = GetTargetObject();
@@ -39,7 +38,7 @@ public sealed class GameObjectActivator : MonoBehaviour
     {
         GameObject target = GetTargetObject();
 
-        Debug.Log($"GameObjectActivator {this.name} SetTargetActive {isActive} for GameObject {target}");
+        Debug.Log($"TogglerOfGameObject {this.name} SetTargetActive {isActive} for GameObject {target}");
 
         if (target == null)
         {
@@ -56,7 +55,7 @@ public sealed class GameObjectActivator : MonoBehaviour
             return targetObject;
         }
 
-        Debug.LogWarning($"{nameof(GameObjectActivator)} on '{gameObject.name}' has no targetObject assigned.", this);
+        Debug.LogWarning($"{nameof(TogglerOfGameObject)} on '{gameObject.name}' has no targetObject assigned.", this);
         return null;
     }
 }

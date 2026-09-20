@@ -20,8 +20,18 @@ public class Action3DButtonControls : AbstractUnitControls
     [SerializeField] private ButtonBinding evadeModifierAlt = new ButtonBinding(Key.RightShift, MouseButtonBinding.None);
     [SerializeField] private ButtonBinding runToggle = new ButtonBinding(Key.LeftAlt, MouseButtonBinding.None);
     [SerializeField] private ButtonBinding flightToggle = new ButtonBinding(Key.Tab, MouseButtonBinding.None);
+    [SerializeField] private ButtonBinding flyingDash = new ButtonBinding(Key.LeftCtrl, MouseButtonBinding.None);
 
-    public override Vector2 GetMove2D()
+    public override Vector2 GetMove2D() => GetPlanarMoveInput().normalized;
+
+    public override Vector3 GetFlyingMove3D()
+    {
+        // Flight uses Space for ascent; Ctrl is reserved for dashing, not descent.
+        Vector2 planarInput = GetPlanarMoveInput();
+        return new Vector3(planarInput.x, jump.IsPressed() ? 1f : 0f, planarInput.y).normalized;
+    }
+
+    private Vector2 GetPlanarMoveInput()
     {
         float x = 0f;
         float y = 0f;
@@ -46,7 +56,7 @@ public class Action3DButtonControls : AbstractUnitControls
             y += 1f;
         }
 
-        return new Vector2(x, y).normalized;
+        return new Vector2(x, y);
     }
 
     public override Vector3 GetMove3D()
@@ -138,6 +148,10 @@ public class Action3DButtonControls : AbstractUnitControls
     {
         return flightToggle.WasPressedThisFrame();
     }
+
+    public override bool WasFlyingDashPressed() => flyingDash.WasPressedThisFrame();
+
+    public override bool IsFlyingDashPressed() => flyingDash.IsPressed();
 
     private bool IsDescendPressed()
     {

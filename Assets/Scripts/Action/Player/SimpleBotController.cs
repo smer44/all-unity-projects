@@ -15,7 +15,7 @@ public class SimpleBotController : AbstractUnitControls
 
     private PlayerController owner;
     private TargetSelector targetSelector;
-    private ActiveGameObjectKeySwitch weaponSwitch;
+    private TogglerOfGameObjectKeySwitch weaponSwitch;
     private float firingCycleTime;
     private int lastWeaponIndex = -1;
     private bool wasFlying;

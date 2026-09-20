@@ -13,8 +13,12 @@ public static class CameraFacingCalc
 
     public static Vector3 RotateFlyingInput(Vector2 input, Transform cameraDirection)
     {
-        Vector3 localDirection = new Vector3(input.x, 0f, input.y);
-        return cameraDirection != null ? cameraDirection.rotation * localDirection : localDirection;
+        return RotateFlyingInput(new Vector3(input.x, 0f, input.y), cameraDirection);
+    }
+
+    public static Vector3 RotateFlyingInput(Vector3 input, Transform cameraDirection)
+    {
+        return cameraDirection != null ? cameraDirection.rotation * input : input;
     }
 
     public static Vector2 RotateInput(Vector2 input, Transform rotationTarget)

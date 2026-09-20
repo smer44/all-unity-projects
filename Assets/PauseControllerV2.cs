@@ -2,9 +2,14 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 
-public class PauseControllerV2 : MonoBehaviour
+public class PauseManager : MonoBehaviour
 {
-    [SerializeField] private GameObject pauseMenuUI;
+
+    [SerializeField] private GameObject[] disableOnUnpause;
+    [SerializeField] private GameObject[] disableOnPause;
+    [SerializeField] private GameObject[] enableOnUnpause;
+    [SerializeField] private GameObject[] enableOnPause;
+
     [SerializeField] private Key pauseKey = Key.Escape;
 
     [SerializeField] private bool pausingAllowed = false;
@@ -26,6 +31,16 @@ public class PauseControllerV2 : MonoBehaviour
         }
     }
 
+    public void SetActiveAdditionalObjects(bool active, GameObject[] objs){
+        foreach (var obj in objs)
+        {   
+            if (obj != null){
+                obj.SetActive(active);
+            }
+            
+        }
+    }
+
     public void SetPausingAllowed(bool allowed)
     {
         this.pausingAllowed = allowed;
@@ -41,11 +56,8 @@ public class PauseControllerV2 : MonoBehaviour
 
     public void PauseGame()
     {
-        if (pauseMenuUI != null)
-        {
-            pauseMenuUI.SetActive(true);
-        }
-
+        SetActiveAdditionalObjects(false,disableOnPause);
+        SetActiveAdditionalObjects(true,enableOnPause);
         Time.timeScale = 0f;
 
 
@@ -56,11 +68,8 @@ public class PauseControllerV2 : MonoBehaviour
 
     public void ResumeGame()
     {
-        if (pauseMenuUI != null)
-        {
-            pauseMenuUI.SetActive(false);
-        }
-
+        SetActiveAdditionalObjects(false,disableOnUnpause);
+        SetActiveAdditionalObjects(true,enableOnUnpause);
         Time.timeScale = 1f;
 
 
@@ -71,7 +80,12 @@ public class PauseControllerV2 : MonoBehaviour
     public void QuitGame()
     {
         Time.timeScale = 1f;
-        Application.Quit();
+
+        #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+        #else
+            Application.Quit();
+        #endif
     }
 }
 

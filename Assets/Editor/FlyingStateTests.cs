@@ -63,6 +63,316 @@ public class FlyingStateTests
         Cursor.visible = oldCursorVisible;
     }
 
+    [TestCase(0f, 0f, 0f, 0f)]
+    [TestCase(0f, 0f, 135f, 65f)]
+    [TestCase(1f, 0f, 90f, 33f)]
+    [TestCase(0f, -1f, -90f, 45f)]
+    [TestCase(1f, 1f, 180f, 65f)]
+    public void SpaceStartsFlightMovementAlongCameraUpCombinedWithWASD(float x, float z, float pitch, float roll)
+    {
+        player.SetState(player.FlyingIdleState);
+        cameraTransform.rotation = Quaternion.Euler(pitch, 37f, roll);
+        playerControls.Move = new Vector2(x, z);
+        playerControls.JumpPressed = true;
+        player.FlyingIdleState.FixedUpdate();
+        Vector3 expected = (cameraTransform.right * x + cameraTransform.up + cameraTransform.forward * z).normalized;
+        Assert.That(player.IsFlyingMoving, Is.True);
+        AssertVector(player.MoveInputRaw3D, new Vector3(x, 1f, z).normalized);
+        AssertVector(player.MoveInputRotated3D, expected);
+        AssertVector(player.FlyingVelocity, expected * (player.FlyingMoveAcceleration * Time.fixedDeltaTime));
+        Vector3 expectedFacing = x == 0f && z == 0f ? player.visualsPivot.forward
+            : (cameraTransform.right * x + cameraTransform.forward * z).normalized;
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        visuals.FixedUpdateController();
+        AssertVector(player.visualsPivot.forward, expectedFacing);
+        playerControls.Move = Vector2.zero;
+        playerControls.JumpPressed = false;
+        player.FlyingMoveState.FixedUpdate();
+        Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.FlyingIdleState));
+    }
+
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
+    public void SpaceEntersUpwardEvadeAndKeepsItsCapturedDirection(bool startMoving, bool keepSpaceHeld)
+    {
+        player.SetState(startMoving ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState);
+        cameraTransform.rotation = Quaternion.Euler(135f, 37f, 65f);
+        playerControls.JumpPressed = true;
+        playerControls.EvadePressed = true;
+        GetField<AbstractPlayerState>(player, "currentState").FixedUpdate();
+        Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.AerialEvadeState));
+        Vector3 capturedDirection = cameraTransform.up;
+        AssertVector(player.FlyingVelocity, capturedDirection * AerialEvadeState.MoveSpeed);
+        cameraTransform.rotation = Quaternion.Euler(15f, 120f, 5f);
+        playerControls.EvadePressed = false;
+        playerControls.JumpPressed = keepSpaceHeld;
+        player.AerialEvadeState.FixedUpdate();
+        AssertVector(player.FlyingVelocity, capturedDirection * AerialEvadeState.MoveSpeed);
+        for (int step = 0; player.IsAerialEvading && step < 30; step++)
+            player.AerialEvadeState.FixedUpdate();
+        Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(keepSpaceHeld
+            ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState));
+        AssertVector(player.MoveInputRotated3D, keepSpaceHeld ? cameraTransform.up : Vector3.zero);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void SpaceDashCapturesUpwardInputThenAllowsSteeringAndReturnsToMovingFlight(bool startMoving)
+    {
+        player.SetState(startMoving ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState);
+        cameraTransform.rotation = Quaternion.Euler(125f, 37f, 65f);
+        playerControls.JumpPressed = true;
+        StartDash();
+        Vector3 capturedDirection = cameraTransform.up;
+        AssertVector(player.FlyingDashState.MovementDirection, capturedDirection);
+        cameraTransform.rotation = Quaternion.Euler(35f, 90f, 25f);
+        playerControls.Move = Vector2.right;
+        for (int step = 0; player.FlyingDashState.IsDirectionLocked && step < 100; step++)
+        {
+            player.FlyingDashState.FixedUpdate();
+            AssertVector(player.FlyingVelocity.normalized, capturedDirection);
+        }
+        Assert.That(player.FlyingDashState.IsDirectionLocked, Is.False);
+        player.FlyingDashState.FixedUpdate();
+        AssertVector(player.FlyingVelocity.normalized, (cameraTransform.up + cameraTransform.right).normalized);
+        playerControls.Move = Vector2.zero;
+        playerControls.DashHeld = false;
+        player.FlyingDashState.FixedUpdate();
+        Assert.That(player.IsFlyingMoving, Is.True);
+        AssertVector(player.MoveInputRotated3D, cameraTransform.up);
+    }
+
+    [Test]
+    public void SpaceAndEvadeAfterDashLockChooseUpwardEvade()
+    {
+        SetField(player, "flyingDashLockDuration", 0f);
+        player.SetState(player.FlyingIdleState);
+        StartDash();
+        playerControls.JumpPressed = true;
+        playerControls.EvadePressed = true;
+        player.FlyingDashState.FixedUpdate();
+        Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.AerialEvadeState));
+        AssertVector(player.FlyingVelocity, cameraTransform.up * AerialEvadeState.MoveSpeed);
+    }
+
+    [TestCase(0f, 0f, false)]
+    [TestCase(1f, 1f, false)]
+    [TestCase(-1f, -1f, true)]
+    [TestCase(0f, 0f, true)]
+    public void SpaceKeyboardBindingCombinesAxesEquallyAndDashDoesNotCancelAscent(float x, float z, bool dash)
+    {
+        var fixtureType = Assembly.Load("Unity.InputSystem.TestFramework")
+            .GetType("UnityEngine.InputSystem.InputTestFixture");
+        object fixture = System.Activator.CreateInstance(fixtureType);
+        fixtureType.GetMethod("Setup").Invoke(fixture, null);
+        Action3DButtonControls controls = ScriptableObject.CreateInstance<Action3DButtonControls>();
+        try
+        {
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            var keys = new System.Collections.Generic.List<Key> { Key.Space };
+            if (x != 0f) keys.Add(x > 0f ? Key.D : Key.A);
+            if (z != 0f) keys.Add(z > 0f ? Key.W : Key.S);
+            if (dash) keys.Add(Key.LeftCtrl);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(keys.ToArray()));
+            InputSystem.Update();
+            AssertVector(controls.GetFlyingMove3D(), new Vector3(x, 1f, z).normalized);
+            Assert.That(controls.GetMove2D(), Is.EqualTo(new Vector2(x, z).normalized));
+            Assert.That(controls.IsFlyingDashPressed(), Is.EqualTo(dash));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl));
+            InputSystem.Update();
+            AssertVector(controls.GetFlyingMove3D(), Vector3.zero);
+        }
+        finally
+        {
+            Object.DestroyImmediate(controls);
+            fixtureType.GetMethod("TearDown").Invoke(fixture, null);
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void DashStartsFromFlightWithCameraRelativeDirectionAndAcceleratesToOneHundred(bool moving)
+    {
+        Assert.That(player.FlyingMoveAcceleration, Is.EqualTo(40f));
+        Assert.That(FlyingMoveState.MaxFlyingSpeed, Is.EqualTo(50f));
+        Assert.That(player.FlyingDashLockDuration, Is.EqualTo(1.5f));
+        player.SetState(moving ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState);
+        cameraTransform.rotation = Quaternion.Euler(125f, 37f, 65f);
+        playerControls.Move = new Vector2(1f, 1f).normalized;
+        player.SetFlyingVelocity(Vector3.up * 20f);
+        StartDash();
+        Vector3 expected = moving ? (cameraTransform.forward + cameraTransform.right).normalized
+            : -cameraTransform.forward;
+        Assert.That(player.IsFlyingDashing, Is.True);
+        Assert.That(player.IsFlying, Is.True);
+        Assert.That(player.PlayerBody.useGravity, Is.False);
+        Assert.That(player.CurrentDisplacementApplyMode, Is.EqualTo(PlayerController.DisplacementApplyMode.Inertia));
+        Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtFlyingCameraState));
+        AssertVector(player.FlyingVelocity, expected * 20f);
+        Invoke(player, "FixedUpdateV1");
+        AssertVector(player.FlyingVelocity, expected * (20f + 300f * Time.fixedDeltaTime));
+        AssertVector(GetField<Vector3>(player, "localVelocity"), player.FlyingVelocity * Time.fixedDeltaTime);
+        for (int i = 0; i < 60; i++)
+            player.FlyingDashState.FixedUpdate();
+        AssertVector(player.FlyingVelocity, expected * 100f);
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public void DashLocksWorldDirectionAndRejectsReleaseEvadeAndFlightToggle(int exitInput)
+    {
+        player.SetState(player.FlyingIdleState);
+        StartDash();
+        Vector3 direction = player.FlyingDashState.MovementDirection;
+        playerControls.DashHeld = false;
+        playerControls.Move = Vector2.right;
+        int steps = 0;
+        while (player.FlyingDashState.IsDirectionLocked)
+        {
+            Assert.That(steps++, Is.LessThan(100));
+            cameraTransform.rotation = Quaternion.Euler(steps * 3f, steps * 7f, steps * 2f);
+            playerControls.EvadePressed = exitInput == 1;
+            if (exitInput == 2)
+                ToggleFlight();
+            player.FlyingDashState.FixedUpdate();
+            Assert.That(player.IsFlyingDashing, Is.True);
+            AssertVector(player.FlyingVelocity.normalized, direction);
+        }
+        Assert.That(steps * Time.fixedDeltaTime, Is.InRange(1.5f, 1.5f + Time.fixedDeltaTime));
+        if (exitInput == 2)
+            ToggleFlight();
+        else
+            player.FlyingDashState.FixedUpdate();
+        Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(exitInput == 0
+            ? (AbstractPlayerState)player.FlyingMoveState : exitInput == 1 ? player.AerialEvadeState : player.IdleState));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void DashCanSteerAfterConfiguredLockAndReturnsToCurrentMovementOnRelease(bool movingOnRelease)
+    {
+        SetField(player, "flyingDashLockDuration", Time.fixedDeltaTime * 2.5f);
+        player.SetState(player.FlyingIdleState);
+        StartDash();
+        for (int i = 0; i < 3; i++)
+            player.FlyingDashState.FixedUpdate();
+        Assert.That(player.FlyingDashState.IsDirectionLocked, Is.False);
+        cameraTransform.rotation = Quaternion.Euler(75f, 120f, 30f);
+        playerControls.Move = Vector2.right;
+        player.FlyingDashState.FixedUpdate();
+        Assert.That(player.IsFlyingDashing, Is.True);
+        AssertVector(player.FlyingVelocity.normalized, cameraTransform.right);
+        playerControls.DashHeld = false;
+        playerControls.Move = movingOnRelease ? Vector2.up : Vector2.zero;
+        player.FlyingDashState.FixedUpdate();
+        Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(movingOnRelease
+            ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState));
+        Assert.That(player.FlyingVelocity.magnitude, Is.LessThanOrEqualTo(50f));
+        StartDash();
+        Assert.That(player.FlyingDashState.IsDirectionLocked, Is.True);
+    }
+
+    [Test]
+    public void TargetedDashFacesItsMovementAndRestoresTargetFacingAfterExit()
+    {
+        player.SetState(player.FlyingIdleState);
+        Transform target = Child("Dash target");
+        target.position = Vector3.right * 10f;
+        visuals.target = target.gameObject;
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        visuals.FixedUpdateController();
+        AssertVector(player.visualsPivot.forward, Vector3.right);
+        StartDash();
+        for (int i = 0; i < 80; i++)
+        {
+            target.position += Vector3.up;
+            player.FlyingDashState.FixedUpdate();
+            visuals.FixedUpdateController();
+            Assert.That(player.IsTargeted, Is.True);
+            Assert.That(visuals.target, Is.SameAs(target.gameObject));
+            AssertVector(player.visualsPivot.forward, player.FlyingVelocity.normalized);
+        }
+        playerControls.DashHeld = false;
+        player.FlyingDashState.FixedUpdate();
+        visuals.FixedUpdateController();
+        visuals.FixedUpdateController();
+        AssertVector(player.visualsPivot.forward, (target.position - player.visualsPivot.position).normalized);
+    }
+
+    [Test]
+    public void EnteringDashKeepsGunAimingAndAnAttackInProgress()
+    {
+        PrepareFlyingAttack(true, 1);
+        playerControls.AimPressed = true;
+        player.FlyingMoveState.Update();
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        player.animator.Update(0.2f);
+        float progress = player.animator.GetCurrentAnimatorStateInfo(0).normalizedTime;
+        StartDash();
+        player.FlyingDashState.FixedUpdate();
+        player.animator.Update(0.05f);
+        Assert.That(player.IsAiming, Is.True);
+        Assert.That(camera.CurrentState, Is.SameAs(camera.FirstPersonFlyingCameraState));
+        Assert.That(player.animator.GetCurrentAnimatorStateInfo(0).IsName("Shoot"), Is.True);
+        Assert.That(player.animator.GetCurrentAnimatorStateInfo(0).normalizedTime, Is.GreaterThan(progress));
+    }
+
+    [Test]
+    public void DashCannotStartFromGroundOrInterruptAnEvade()
+    {
+        StartDash();
+        Assert.That(player.IsFlyingDashing, Is.False);
+        playerControls.Move = Vector2.up;
+        player.SetState(player.AerialEvadeState);
+        StartDash();
+        Assert.That(player.IsAerialEvading, Is.True);
+    }
+
+    [Test]
+    public void OnlyLeftControlStartsAndHoldsTheFlyingDash()
+    {
+        var fixtureType = Assembly.Load("Unity.InputSystem.TestFramework")
+            .GetType("UnityEngine.InputSystem.InputTestFixture");
+        object fixture = System.Activator.CreateInstance(fixtureType);
+        fixtureType.GetMethod("Setup").Invoke(fixture, null);
+        Action3DButtonControls controls = ScriptableObject.CreateInstance<Action3DButtonControls>();
+        try
+        {
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.RightCtrl));
+            InputSystem.Update();
+            Assert.That(controls.WasFlyingDashPressed(), Is.False);
+            Assert.That(controls.IsFlyingDashPressed(), Is.False);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl));
+            InputSystem.Update();
+            Assert.That(controls.WasFlyingDashPressed(), Is.True);
+            Assert.That(controls.IsFlyingDashPressed(), Is.True);
+            InputSystem.Update();
+            Assert.That(controls.WasFlyingDashPressed(), Is.False);
+            Assert.That(controls.IsFlyingDashPressed(), Is.True);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            InputSystem.Update();
+            Assert.That(controls.IsFlyingDashPressed(), Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(controls);
+            fixtureType.GetMethod("TearDown").Invoke(fixture, null);
+        }
+    }
+
+    private void StartDash()
+    {
+        playerControls.DashPressed = true;
+        playerControls.DashHeld = true;
+        Invoke(player, "UpdateFlyingDash");
+        playerControls.DashPressed = false;
+    }
+
     [TestCase(-1f)]
     [TestCase(1f)]
     public void PitchContinuesThroughTwoFullTurns(float sign)
@@ -126,7 +436,7 @@ public class FlyingStateTests
         AssertVector(player.MoveInputRotated3D, expected);
         Assert.That(Vector3.Dot(player.MoveInputRotated3D, cameraTransform.up), Is.EqualTo(0f).Within(0.0001f));
         AssertVector(GetField<Vector3>(player, "localVelocity"),
-            expected * (FlyingMoveState.BasicAcceleration * Time.fixedDeltaTime * Time.fixedDeltaTime));
+            expected * (player.FlyingMoveAcceleration * Time.fixedDeltaTime * Time.fixedDeltaTime));
 
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
         visuals.FixedUpdateController();
@@ -490,7 +800,9 @@ public class FlyingStateTests
             playerControls.Move = Vector2.up;
             player.FlyingIdleState.FixedUpdate();
             Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.FlyingMoveState));
-            player.FlyingMoveState.FixedUpdate();
+            // Build enough momentum to coast after the unchanged idle braking step.
+            for (int moveStep = 0; moveStep < 3; moveStep++)
+                player.FlyingMoveState.FixedUpdate();
             Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtFlyingCameraState));
             playerControls.Move = Vector2.zero;
             player.FlyingMoveState.FixedUpdate();
@@ -734,7 +1046,7 @@ public class FlyingStateTests
         AssertVector(player.FlyingVelocity, Vector3.zero);
         player.FlyingMoveState.FixedUpdate();
         AssertVector(player.FlyingVelocity,
-            cameraTransform.forward * (FlyingMoveState.BasicAcceleration * Time.fixedDeltaTime));
+            cameraTransform.forward * (player.FlyingMoveAcceleration * Time.fixedDeltaTime));
 
         float firstSpeed = player.FlyingVelocity.magnitude;
         player.FlyingMoveState.FixedUpdate();
@@ -743,7 +1055,7 @@ public class FlyingStateTests
 
         Vector3 previousVelocity = player.FlyingVelocity;
         cameraTransform.rotation = Quaternion.Euler(-35f, 132f, 15f);
-        float acceleration = FlyingMoveState.BasicAcceleration *
+        float acceleration = player.FlyingMoveAcceleration *
             (1f - previousVelocity.magnitude / FlyingMoveState.MaxFlyingSpeed);
         player.FlyingMoveState.FixedUpdate();
         AssertVector(player.FlyingVelocity, previousVelocity + cameraTransform.forward * (acceleration * Time.fixedDeltaTime));
@@ -855,7 +1167,7 @@ public class FlyingStateTests
         playerControls.Move = Vector2.left;
         player.FlyingIdleState.FixedUpdate();
         Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.FlyingMoveState));
-        float acceleration = FlyingMoveState.BasicAcceleration *
+        float acceleration = player.FlyingMoveAcceleration *
             (1f - previousVelocity.magnitude / FlyingMoveState.MaxFlyingSpeed);
         AssertVector(player.FlyingVelocity, previousVelocity - cameraTransform.right * (acceleration * Time.fixedDeltaTime));
     }
@@ -888,7 +1200,7 @@ public class FlyingStateTests
         Vector3 initialVelocity = Vector3.up * initialSpeed;
         player.SetFlyingVelocity(initialVelocity);
         player.FlyingMoveState.FixedUpdate();
-        float acceleration = FlyingMoveState.BasicAcceleration *
+        float acceleration = player.FlyingMoveAcceleration *
             Mathf.Clamp01(1f - initialSpeed / FlyingMoveState.MaxFlyingSpeed);
         Vector3 direction = (cameraTransform.right + cameraTransform.forward).normalized;
         Vector3 expected = Vector3.ClampMagnitude(initialVelocity + direction *
@@ -906,7 +1218,7 @@ public class FlyingStateTests
             Time.fixedDeltaTime = 10f;
             player.SetState(player.FlyingMoveState);
             playerControls.Move = Vector2.up;
-            player.SetFlyingVelocity(cameraTransform.forward * 90f);
+            player.SetFlyingVelocity(cameraTransform.forward * (FlyingMoveState.MaxFlyingSpeed * 0.9f));
             player.FlyingMoveState.FixedUpdate();
             AssertVector(player.FlyingVelocity, cameraTransform.forward * FlyingMoveState.MaxFlyingSpeed);
         }
@@ -985,7 +1297,7 @@ public class FlyingStateTests
         float expectedSpeed = 0f;
         for (int i = 0; i < 20; i++)
         {
-            expectedSpeed += FlyingMoveState.BasicAcceleration *
+            expectedSpeed += player.FlyingMoveAcceleration *
                 (1f - expectedSpeed / FlyingMoveState.MaxFlyingSpeed) * Time.fixedDeltaTime;
             Invoke(player, "FixedUpdateV1");
             AssertVector(player.FlyingVelocity, cameraTransform.forward * expectedSpeed);
@@ -1022,7 +1334,7 @@ public class FlyingStateTests
             Invoke(player, "FixedUpdateV1");
             Vector3 applied = GetField<Vector3>(player, "previousAppliedDisplacement");
             Assert.That(applied.x, Is.InRange(0f, 0.65f));
-            Assert.That(applied.z, Is.GreaterThan(0.5f));
+            Assert.That(applied.z, Is.GreaterThan(0.4f));
             AssertVector(player.FlyingVelocity, applied / Time.fixedDeltaTime);
             SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
             visuals.FixedUpdateController();
@@ -1036,7 +1348,7 @@ public class FlyingStateTests
             Invoke(player, "FixedUpdateV1");
             applied = GetField<Vector3>(player, "previousAppliedDisplacement");
             Assert.That(applied.x, Is.LessThan(0.01f));
-            Assert.That(applied.z, Is.GreaterThan(0.5f));
+            Assert.That(applied.z, Is.GreaterThan(0.4f));
             AssertVector(player.FlyingVelocity, applied / Time.fixedDeltaTime);
         }
         finally
@@ -1160,7 +1472,7 @@ public class FlyingStateTests
         Assert.That(animationState.IsName("Shoot"), Is.True);
         Assert.That(animationState.normalizedTime, Is.LessThan(1f));
 
-        GetField<ActiveGameObjectKeySwitch>(player, "handWeaponSwitch").SwitchActive(0);
+        GetField<TogglerOfGameObjectKeySwitch>(player, "handWeaponSwitch").SwitchActive(0);
         player.animator.Update(5f);
         player.FlyingIdleState.FixedUpdate();
         player.animator.Update(0.2f);
@@ -1243,7 +1555,7 @@ public class FlyingStateTests
         if (weaponIndex == 1)
         {
             // Changing weapons must allow the attack during the same jump or fall.
-            GetField<ActiveGameObjectKeySwitch>(player, "handWeaponSwitch").SwitchActive(0);
+            GetField<TogglerOfGameObjectKeySwitch>(player, "handWeaponSwitch").SwitchActive(0);
             aerialState.FixedUpdate();
             Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.AirHitState));
         }
@@ -1259,9 +1571,9 @@ public class FlyingStateTests
         var weaponPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Player/HandWeaponSwitch.prefab");
         var childWeapons = Object.Instantiate(weaponPrefab, candidateObject.transform);
         childWeapons.SetActive(false);
-        var childSwitch = childWeapons.GetComponent<ActiveGameObjectKeySwitch>();
+        var childSwitch = childWeapons.GetComponent<TogglerOfGameObjectKeySwitch>();
         childSwitch.SwitchActive(1);
-        var assignedSwitch = Child("Assigned switch").gameObject.AddComponent<ActiveGameObjectKeySwitch>();
+        var assignedSwitch = Child("Assigned switch").gameObject.AddComponent<TogglerOfGameObjectKeySwitch>();
         var candidate = candidateObject.AddComponent<PlayerController>();
         SetField(candidate, "buttonControls", sourceControls);
         if (alreadyAssigned)
@@ -1270,7 +1582,7 @@ public class FlyingStateTests
         Invoke(candidate, "Awake");
         try
         {
-            Assert.That(GetField<ActiveGameObjectKeySwitch>(candidate, "handWeaponSwitch"),
+            Assert.That(GetField<TogglerOfGameObjectKeySwitch>(candidate, "handWeaponSwitch"),
                 Is.SameAs(alreadyAssigned ? assignedSwitch : childSwitch));
             Assert.That(candidate.IsGunSelected(), Is.EqualTo(!alreadyAssigned));
             childSwitch.SwitchActive(2);
@@ -1294,8 +1606,8 @@ public class FlyingStateTests
 
         if (weaponIndex >= 0)
         {
-            var weaponSwitch = Child("Weapons").gameObject.AddComponent<ActiveGameObjectKeySwitch>();
-            typeof(ActiveGameObjectSwitch).GetField("gameObjects", BindingFlags.NonPublic | BindingFlags.Instance)
+            var weaponSwitch = Child("Weapons").gameObject.AddComponent<TogglerOfGameObjectKeySwitch>();
+            typeof(TogglerOfGameObjectSwitch).GetField("gameObjects", BindingFlags.NonPublic | BindingFlags.Instance)
                 .SetValue(weaponSwitch, new[] { Child("Empty").gameObject, Child("Gun").gameObject, Child("Sword").gameObject });
             weaponSwitch.SwitchActive(weaponIndex);
             SetField(player, "handWeaponSwitch", weaponSwitch);
@@ -1339,7 +1651,7 @@ public class FlyingStateTests
     [TestCase(8)]
     public void LocomotionAimingRequiresHeldInputAndAGunAndReleasesOnEitherChange(int stateIndex)
     {
-        ActiveGameObjectKeySwitch weapons = SetupAimingWeapons(0);
+        TogglerOfGameObjectKeySwitch weapons = SetupAimingWeapons(0);
         AbstractPlayerState state = GetAimingState(stateIndex);
         player.SetState(state);
         state.Update();
@@ -1549,10 +1861,10 @@ public class FlyingStateTests
         Assert.That(player.IsBlocking(), Is.True);
     }
 
-    private ActiveGameObjectKeySwitch SetupAimingWeapons(int selectedIndex)
+    private TogglerOfGameObjectKeySwitch SetupAimingWeapons(int selectedIndex)
     {
-        var weapons = Child("Aiming weapons").gameObject.AddComponent<ActiveGameObjectKeySwitch>();
-        typeof(ActiveGameObjectSwitch).GetField("gameObjects", BindingFlags.NonPublic | BindingFlags.Instance)
+        var weapons = Child("Aiming weapons").gameObject.AddComponent<TogglerOfGameObjectKeySwitch>();
+        typeof(TogglerOfGameObjectSwitch).GetField("gameObjects", BindingFlags.NonPublic | BindingFlags.Instance)
             .SetValue(weapons, new[] { Child("Empty").gameObject, Child("Gun").gameObject, Child("Sword").gameObject });
         weapons.SwitchActive(selectedIndex);
         SetField(player, "handWeaponSwitch", weapons);
@@ -1632,16 +1944,21 @@ public class FlyingTestControls : AbstractUnitControls
     public bool EvadePressed;
     public bool AttackPressed;
     public bool AimPressed;
+    public bool DashPressed;
+    public bool DashHeld;
+    public bool JumpPressed;
     public override Vector2 GetMove2D() => Move;
     public override Vector3 GetMove3D() => new Vector3(Move.x, 0f, Move.y);
     public override Vector2 GetMouseMove2D() => Look;
-    public override bool IsJumpPressed() => false;
+    public override bool IsJumpPressed() => JumpPressed;
     public override bool IsInteractButtonPressed() => false;
     public override bool IsCancelButtonPressed() => false;
     public override bool IsPunchButtonPresssed() => AttackPressed;
     public override bool IsBlockButtonPressed() => AimPressed;
     public override bool IsAimButtonPressed() => AimPressed;
     public override bool IsEvadeModifierPressed() => EvadePressed;
+    public override bool WasFlyingDashPressed() => DashPressed;
+    public override bool IsFlyingDashPressed() => DashHeld;
     public override bool WasRunWalkTogglePressed() => false;
     public override bool WasFlightTogglePressed()
     {
@@ -1658,7 +1975,7 @@ public class UpperBodyVisualsControllerTests
     private PlayerController player;
     private UpperBodyTestControls sourceControls;
     private UpperBodyTestControls controls;
-    private ActiveGameObjectKeySwitch weapons;
+    private TogglerOfGameObjectKeySwitch weapons;
     private Transform direction;
     private BoxCollider floor;
 
@@ -1696,8 +2013,8 @@ public class UpperBodyVisualsControllerTests
         SetField(player, "isRunMode", true);
         SetField(player, "BattleReady", true);
 
-        weapons = Child("Weapons").AddComponent<ActiveGameObjectKeySwitch>();
-        typeof(ActiveGameObjectSwitch).GetField("gameObjects", BindingFlags.NonPublic | BindingFlags.Instance)
+        weapons = Child("Weapons").AddComponent<TogglerOfGameObjectKeySwitch>();
+        typeof(TogglerOfGameObjectSwitch).GetField("gameObjects", BindingFlags.NonPublic | BindingFlags.Instance)
             .SetValue(weapons, new[] { Child("Unarmed"), Child("Gun"), Child("Sword") });
         weapons.SwitchActive(2);
         SetField(player, "handWeaponSwitch", weapons);

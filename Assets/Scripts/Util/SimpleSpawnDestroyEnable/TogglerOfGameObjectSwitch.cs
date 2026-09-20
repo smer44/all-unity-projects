@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class ActiveGameObjectSwitch : MonoBehaviour
+public class TogglerOfGameObjectSwitch : MonoBehaviour
 {
     [SerializeField] private GameObject[] gameObjects;
 

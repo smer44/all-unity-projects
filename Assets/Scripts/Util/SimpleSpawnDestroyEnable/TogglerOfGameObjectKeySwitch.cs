@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class ActiveGameObjectKeySwitch : ActiveGameObjectSwitch
+public class TogglerOfGameObjectKeySwitch : TogglerOfGameObjectSwitch
 {
     [SerializeField] private Key[] keys;
     [SerializeField] private bool useKeyboardInput = true;

@@ -60,7 +60,7 @@ public class PlayerVisualsRotationController : MonoBehaviour
         bool isFlyingState = currentState == FlyingNotTargetedState || currentState == FlyingTargetedState;
         if (playerController != null && playerController.IsFlying)
         {
-            if (!isFlyingState)
+            if (!isFlyingState || playerController.IsFlyingDashing)
             {
                 SetState(GetDefaultState());
             }
@@ -109,7 +109,7 @@ public class PlayerVisualsRotationController : MonoBehaviour
     {
         if (playerController != null && playerController.IsFlying)
         {
-            return IsTargeted ? FlyingTargetedState : FlyingNotTargetedState;
+            return IsTargeted && !playerController.IsFlyingDashing ? FlyingTargetedState : FlyingNotTargetedState;
         }
 
         if (playerController != null && playerController.IsInWater())

@@ -18,16 +18,17 @@ public class FlyingNotTargetedFacingState : AbstractPlayerVisualsRotationState
             return;
         }
 
-        if (Controller.IsTargeted)
+        if (Controller.IsTargeted && !player.IsFlyingDashing)
         {
             Controller.SetState(Controller.FlyingTargetedState);
             return;
         }
 
         Vector3 cameraUp = player.Direction != null ? player.Direction.up : Vector3.up;
-        // Moving flight faces the input direction even when momentum points elsewhere.
+        // Moving flight faces WASD input, ignoring Space's camera-relative ascent.
         // Idle continues to follow residual velocity while coasting.
-        Vector3 facing = player.IsFlyingMoving ? player.MoveInputRotated3D : player.FlyingVelocity;
+        Vector3 facing = player.IsFlyingDashing ? player.FlyingDashState.MovementDirection
+            : player.IsFlyingMoving ? player.FlyingMoveFacingDirection : player.FlyingVelocity;
         Controller.RotateToFacing3D(facing, cameraUp);
     }
 

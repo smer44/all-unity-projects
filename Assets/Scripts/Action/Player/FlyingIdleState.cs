@@ -5,7 +5,7 @@ public class FlyingIdleState : AbstractPlayerState
     public override bool AllowsAiming => true;
 
     private const float StopSpeedThreshold = 0.01f;
-    public const float BrakingAcceleration = FlyingMoveState.BasicAcceleration;
+    public const float BrakingAcceleration = 80f;
 
     public FlyingIdleState(PlayerController controller) : base(controller)
     {
@@ -28,13 +28,13 @@ public class FlyingIdleState : AbstractPlayerState
         Controller.UpdateFlyingMoveInput();
         if (Controller.IsEvadeModifierPressed())
         {
-            Controller.SetState(Controller.MoveInputRaw != Vector2.zero
+            Controller.SetState(Controller.MoveInputRaw3D != Vector3.zero
                 ? (AbstractPlayerState)Controller.AerialEvadeState
                 : Controller.AerialEvadeDownwardsState);
             return;
         }
 
-        if (Controller.MoveInputRaw != Vector2.zero)
+        if (Controller.MoveInputRaw3D != Vector3.zero)
         {
             Controller.SetState(Controller.FlyingMoveState);
             Controller.FlyingMoveState.FixedUpdate();

@@ -42,7 +42,7 @@ public class AerialEvadeState : AbstractPlayerState
         {
             // Refresh the converted input for normal facing on the exit tick.
             Controller.UpdateFlyingMoveInput();
-            Controller.SetState(Controller.MoveInputRaw != Vector2.zero
+            Controller.SetState(Controller.MoveInputRaw3D != Vector3.zero
                 ? (AbstractPlayerState)Controller.FlyingMoveState
                 : Controller.FlyingIdleState);
             return;

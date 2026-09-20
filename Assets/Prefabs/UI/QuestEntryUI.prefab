@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 3625205798415291784}
   - component: {fileID: 1629359684137134260}
   - component: {fileID: 5213485155552206646}
-  - component: {fileID: 83628709194207431}
   m_Layer: 5
   m_Name: QuestDescription
   m_TagString: Untagged
@@ -138,29 +137,6 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
---- !u!114 &83628709194207431
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3785779810347640887}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8237958737ee44f40aebc8ba6fada90b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PackedBoxElement
-  mode: 0
-  weight: 0.25
-  hasMinWidth: 0
-  minWidthValue:
-    unit: 0
-    value: 0
-  hasMinHeight: 1
-  minHeightValue:
-    unit: 0
-    value: 66
-  priority: 1
 --- !u!1 &7728942670327231573
 GameObject:
   m_ObjectHideFlags: 0
@@ -172,7 +148,6 @@ GameObject:
   - component: {fileID: 1293424542058929052}
   - component: {fileID: 6579396948453569930}
   - component: {fileID: 6084523485683928566}
-  - component: {fileID: 5864635923624837519}
   m_Layer: 5
   m_Name: QuestName
   m_TagString: Untagged
@@ -299,29 +274,6 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
---- !u!114 &5864635923624837519
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7728942670327231573}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8237958737ee44f40aebc8ba6fada90b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PackedBoxElement
-  mode: 0
-  weight: 0.25
-  hasMinWidth: 0
-  minWidthValue:
-    unit: 0
-    value: 0
-  hasMinHeight: 1
-  minHeightValue:
-    unit: 0
-    value: 30
-  priority: 1
 --- !u!1 &9185065807135488911
 GameObject:
   m_ObjectHideFlags: 0
@@ -331,7 +283,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8934550807010358276}
-  - component: {fileID: 7456433530060305513}
   - component: {fileID: 4527145367570845043}
   m_Layer: 5
   m_Name: QuestEntryUI
@@ -361,30 +312,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 420, y: 100}
   m_Pivot: {x: 0.5, y: 1}
---- !u!114 &7456433530060305513
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9185065807135488911}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 05690cfbd26d87346b184687eb878da4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PackedBox
-  m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
-  m_ChildAlignment: 0
-  packingMode: 0
-  widthMode: 0
-  heightMode: 1
-  spacing: 4
-  normalizeWeightedOverflow: 1
-  respectChildMinSize: 1
 --- !u!114 &4527145367570845043
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -397,6 +324,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d7227be299f4bb58e4d335db9b4b326, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::QuestEntryUI
-  questDescriptionText: {fileID: 5213485155552206646}
   questNameText: {fileID: 6084523485683928566}
-
+  questDescriptionText: {fileID: 5213485155552206646}
