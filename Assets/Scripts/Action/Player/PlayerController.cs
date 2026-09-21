@@ -54,6 +54,18 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int aerialJumpAmount = 1;
     [SerializeField, Min(0f)] private float flyingMoveAcceleration = 40f;
     public float FlyingMoveAcceleration => flyingMoveAcceleration;
+    [SerializeField, Min(0f)] private float flyingMoveFrictionModifier = 0.8f;
+    public float FlyingMoveFrictionModifier => flyingMoveFrictionModifier;
+    [SerializeField, Min(0f)] private float flyingDashAcceleration = 300f;
+    public float FlyingDashAcceleration => flyingDashAcceleration;
+    [SerializeField, Min(0f)] private float flyingDashFrictionModifier = 3f;
+    public float FlyingDashFrictionModifier => flyingDashFrictionModifier;
+    [Tooltip("Speed-proportional friction coefficient while in idle flight.")]
+    [SerializeField, Min(0f)] private float flyingIdleFrictionModifier = 200f;
+    public float FlyingIdleFrictionModifier => flyingIdleFrictionModifier;
+    [Tooltip("Minimum speed lost per second while in idle flight.")]
+    [SerializeField, Min(0f)] private float flyingIdleMinimumFrictionMagnitude = 200f;
+    public float FlyingIdleMinimumFrictionMagnitude => flyingIdleMinimumFrictionMagnitude;
     [SerializeField, Min(0f)] private float flyingDashLockDuration = 1.5f;
     public float FlyingDashLockDuration => flyingDashLockDuration;
     [SerializeField] private DisplacementApplyMode displacementApplyMode = DisplacementApplyMode.Simple;
@@ -89,9 +101,10 @@ public class PlayerController : MonoBehaviour
     public AerialEvadeDownwardsState AerialEvadeDownwardsState { get; private set; }
 
     public bool IsAerialEvading => currentState is AerialEvadeState;
+    public bool IsFlyingIdle => currentState is FlyingIdleState;
     public bool IsFlyingMoving => currentState is FlyingMoveState;
     public bool IsFlyingDashing => currentState is FlyingDashState;
-    public bool IsFlying => currentState is FlyingIdleState || IsFlyingMoving || IsFlyingDashing || IsAerialEvading;
+    public bool IsFlying => IsFlyingIdle || IsFlyingMoving || IsFlyingDashing || IsAerialEvading;
     public bool IsTargeted => visualsRotationController != null && visualsRotationController.IsTargeted;
     public bool IsAiming => PlayerCameraController != null
         && (PlayerCameraController.CurrentState is FirstPersonCameraState
@@ -932,16 +945,15 @@ public class PlayerController : MonoBehaviour
     {
         if (displacementApplyMode == DisplacementApplyMode.Inertia)
         {
-            float maxSpeed = currentState is FlyingMoveState ? FlyingMoveState.MaxFlyingSpeed : float.PositiveInfinity;
             SetFlyingVelocity(KinematicCalc.IntegrateVelocity(
-                FlyingVelocity, inputRotated * speed, Time.fixedDeltaTime, maxSpeed));
+                FlyingVelocity, inputRotated * speed, Time.fixedDeltaTime, float.PositiveInfinity));
             return;
         }
 
         localVelocity += inputRotated * (speed * Time.fixedDeltaTime);
     }
 
-    // Evades prescribe a frozen velocity instead of adding acceleration each tick.
+    // Apply the state's final world velocity to this physics step's displacement.
     public void SetFlyingVelocity(Vector3 velocity)
     {
         FlyingVelocity = velocity;

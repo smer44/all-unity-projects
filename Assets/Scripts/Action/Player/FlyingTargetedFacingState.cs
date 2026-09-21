@@ -24,6 +24,11 @@ public class FlyingTargetedFacingState : AbstractPlayerVisualsRotationState
             return;
         }
 
+        if (player.IsFlyingIdle)
+        {
+            return;
+        }
+
         if (Controller.TryGetTargetFacing3D(out Vector3 facing))
         {
             Vector3 cameraUp = player.Direction != null ? player.Direction.up : Vector3.up;

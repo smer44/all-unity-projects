@@ -135,8 +135,13 @@ public class FlyingStateTests
             AssertVector(player.FlyingVelocity.normalized, capturedDirection);
         }
         Assert.That(player.FlyingDashState.IsDirectionLocked, Is.False);
+        Vector3 previousVelocity = player.FlyingVelocity;
         player.FlyingDashState.FixedUpdate();
-        AssertVector(player.FlyingVelocity.normalized, (cameraTransform.up + cameraTransform.right).normalized);
+        Vector3 thrustDirection = (cameraTransform.up + cameraTransform.right).normalized;
+        AssertVector(player.FlyingDashState.MovementDirection, thrustDirection);
+        AssertVector(player.FlyingVelocity,
+            previousVelocity * (1f - player.FlyingDashFrictionModifier * Time.fixedDeltaTime)
+            + thrustDirection * (player.FlyingDashAcceleration * Time.fixedDeltaTime));
         playerControls.Move = Vector2.zero;
         playerControls.DashHeld = false;
         player.FlyingDashState.FixedUpdate();
@@ -196,7 +201,11 @@ public class FlyingStateTests
     public void DashStartsFromFlightWithCameraRelativeDirectionAndAcceleratesToOneHundred(bool moving)
     {
         Assert.That(player.FlyingMoveAcceleration, Is.EqualTo(40f));
-        Assert.That(FlyingMoveState.MaxFlyingSpeed, Is.EqualTo(50f));
+        Assert.That(player.FlyingMoveFrictionModifier, Is.EqualTo(0.8f));
+        Assert.That(player.FlyingDashAcceleration, Is.EqualTo(300f));
+        Assert.That(player.FlyingDashFrictionModifier, Is.EqualTo(3f));
+        Assert.That(player.FlyingIdleFrictionModifier, Is.EqualTo(200f));
+        Assert.That(player.FlyingIdleMinimumFrictionMagnitude, Is.EqualTo(200f));
         Assert.That(player.FlyingDashLockDuration, Is.EqualTo(1.5f));
         player.SetState(moving ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState);
         cameraTransform.rotation = Quaternion.Euler(125f, 37f, 65f);
@@ -212,11 +221,31 @@ public class FlyingStateTests
         Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtFlyingCameraState));
         AssertVector(player.FlyingVelocity, expected * 20f);
         Invoke(player, "FixedUpdateV1");
-        AssertVector(player.FlyingVelocity, expected * (20f + 300f * Time.fixedDeltaTime));
+        AssertVector(player.FlyingVelocity, expected * (20f + (300f - 20f * 3f) * Time.fixedDeltaTime));
         AssertVector(GetField<Vector3>(player, "localVelocity"), player.FlyingVelocity * Time.fixedDeltaTime);
-        for (int i = 0; i < 60; i++)
+        if (!moving)
+            playerControls.Move = Vector2.zero;
+        for (int i = 0; i < 300; i++)
             player.FlyingDashState.FixedUpdate();
-        AssertVector(player.FlyingVelocity, expected * 100f);
+        Assert.That(player.FlyingVelocity.magnitude, Is.EqualTo(100f).Within(0.001f));
+        AssertVector(player.FlyingVelocity.normalized, expected);
+    }
+
+    [TestCase(150f, 3f, 200f, 50f)]
+    [TestCase(300f, 6f, 0f, 50f)]
+    public void DashUsesConfiguredThrustAndFrictionWithoutClampingInheritedSpeed(
+        float acceleration, float frictionModifier, float initialSpeed, float terminalSpeed)
+    {
+        SetField(player, "flyingDashAcceleration", acceleration);
+        SetField(player, "flyingDashFrictionModifier", frictionModifier);
+        player.SetState(player.FlyingIdleState);
+        player.SetFlyingVelocity(Vector3.up * initialSpeed);
+        StartDash();
+        AssertVector(player.FlyingVelocity, Vector3.back * initialSpeed);
+        for (int i = 0; i < 300; i++)
+            player.FlyingDashState.FixedUpdate();
+        Assert.That(player.FlyingVelocity.magnitude, Is.EqualTo(terminalSpeed).Within(0.001f));
+        AssertVector(player.FlyingVelocity.normalized, Vector3.back);
     }
 
     [TestCase(0)]
@@ -262,9 +291,14 @@ public class FlyingStateTests
         Assert.That(player.FlyingDashState.IsDirectionLocked, Is.False);
         cameraTransform.rotation = Quaternion.Euler(75f, 120f, 30f);
         playerControls.Move = Vector2.right;
+        Vector3 previousVelocity = player.FlyingVelocity;
         player.FlyingDashState.FixedUpdate();
         Assert.That(player.IsFlyingDashing, Is.True);
-        AssertVector(player.FlyingVelocity.normalized, cameraTransform.right);
+        AssertVector(player.FlyingDashState.MovementDirection, cameraTransform.right);
+        AssertVector(player.FlyingVelocity,
+            previousVelocity * (1f - player.FlyingDashFrictionModifier * Time.fixedDeltaTime)
+            + cameraTransform.right * (player.FlyingDashAcceleration * Time.fixedDeltaTime));
+        Assert.That(Vector3.Angle(player.FlyingVelocity, cameraTransform.right), Is.GreaterThan(1f));
         playerControls.DashHeld = false;
         playerControls.Move = movingOnRelease ? Vector2.up : Vector2.zero;
         player.FlyingDashState.FixedUpdate();
@@ -284,7 +318,7 @@ public class FlyingStateTests
         visuals.target = target.gameObject;
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
         visuals.FixedUpdateController();
-        AssertVector(player.visualsPivot.forward, Vector3.right);
+        AssertVector(player.visualsPivot.forward, Vector3.forward);
         StartDash();
         for (int i = 0; i < 80; i++)
         {
@@ -296,6 +330,7 @@ public class FlyingStateTests
             AssertVector(player.visualsPivot.forward, player.FlyingVelocity.normalized);
         }
         playerControls.DashHeld = false;
+        playerControls.Move = Vector2.up;
         player.FlyingDashState.FixedUpdate();
         visuals.FixedUpdateController();
         visuals.FixedUpdateController();
@@ -468,24 +503,34 @@ public class FlyingStateTests
         AssertVector(player.visualsPivot.forward, inputDirection.normalized);
     }
 
-    [Test]
-    public void FlyingIdleKeepsItsFacingWhenThereIsNoMovement()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void FlyingIdleKeepsItsFacingWhileCoastingAndAfterStopping(bool targeted)
     {
+        SetField(player, "flyingIdleFrictionModifier", 1f);
         player.SetState(player.FlyingMoveState);
         playerControls.Move = Vector2.up;
         player.FlyingMoveState.FixedUpdate();
         visuals.FixedUpdateController();
+        player.visualsPivot.rotation = Quaternion.Euler(23f, 47f, 81f);
         Quaternion lastFacing = player.visualsPivot.rotation;
+        player.SetFlyingVelocity(Vector3.left * 100f);
+        Transform target = Child("Idle target");
+        visuals.target = targeted ? target.gameObject : null;
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
 
         playerControls.Move = Vector2.zero;
         player.FlyingMoveState.FixedUpdate();
         for (int i = 0; i < 200; i++)
         {
+            cameraTransform.rotation = Quaternion.Euler(i * 7f, i * 11f, i * 5f);
+            target.position = new Vector3(i + 10f, 15f, -20f);
             player.FlyingIdleState.FixedUpdate();
             visuals.FixedUpdateController();
+            Invoke(visuals, "LateUpdate");
+            Assert.That(Quaternion.Angle(player.visualsPivot.rotation, lastFacing), Is.LessThan(0.01f));
         }
         AssertVector(player.FlyingVelocity, Vector3.zero);
-        lastFacing = player.visualsPivot.rotation;
         cameraTransform.rotation = Quaternion.Euler(125f, 20f, 60f);
         visuals.FixedUpdateController();
         Assert.That(Quaternion.Angle(player.visualsPivot.rotation, lastFacing), Is.LessThan(0.01f));
@@ -495,7 +540,7 @@ public class FlyingStateTests
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
-    public void AerialStatesTrackTargetsUnlessRotationIsFrozen(int stateIndex)
+    public void AerialStatesTrackTargetsUnlessIdleOrRotationIsFrozen(int stateIndex)
     {
         playerControls.Move = Vector2.right;
         player.SetState(GetAerialState(stateIndex));
@@ -511,7 +556,7 @@ public class FlyingStateTests
             target.position = player.visualsPivot.position + offset;
             visuals.FixedUpdateController();
             Invoke(visuals, "LateUpdate");
-            AssertVector(player.visualsPivot.forward, stateIndex < 2 ? offset.normalized : entryFacing);
+            AssertVector(player.visualsPivot.forward, stateIndex == 1 ? offset.normalized : entryFacing);
             AssertVector(player.FlyingVelocity, velocity);
             Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
                 Is.SameAs(stateIndex < 2
@@ -546,7 +591,7 @@ public class FlyingStateTests
         visuals.FixedUpdateController();
         Invoke(visuals, "LateUpdate");
         Vector3 targetedFacing = target.position.normalized;
-        AssertVector(player.visualsPivot.forward, stateIndex < 2 ? targetedFacing : entryFacing);
+        AssertVector(player.visualsPivot.forward, stateIndex == 1 ? targetedFacing : entryFacing);
 
         visuals.target = null;
         visuals.FixedUpdateController();
@@ -556,14 +601,13 @@ public class FlyingStateTests
             Is.SameAs(stateIndex < 2
                 ? (AbstractPlayerVisualsRotationState)visuals.FlyingNotTargetedState
                 : visuals.FreezeRotationState));
-        Vector3 expected = stateIndex == 0 ? Vector3.forward
-            : stateIndex == 1 ? Vector3.right : entryFacing;
+        Vector3 expected = stateIndex == 1 ? Vector3.right : entryFacing;
         AssertVector(player.visualsPivot.forward, expected);
     }
 
     [TestCase(false)]
     [TestCase(true)]
-    public void TargetedEvadesFreezeAcrossPhysicsAndLateUpdatesThenResumeTracking(bool downwards)
+    public void TargetedEvadesKeepFacingInIdleAndResumeTrackingWhenMoving(bool downwards)
     {
         playerControls.Move = Vector2.right;
         AerialEvadeState evade = downwards ? player.AerialEvadeDownwardsState : player.AerialEvadeState;
@@ -591,6 +635,9 @@ public class FlyingStateTests
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
             Is.SameAs(visuals.FlyingTargetedState));
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        visuals.FixedUpdateController();
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, entryRotation), Is.LessThan(0.01f));
+        player.SetState(player.FlyingMoveState);
         visuals.FixedUpdateController();
         AssertVector(player.visualsPivot.forward, target.position.normalized);
     }
@@ -722,7 +769,7 @@ public class FlyingStateTests
     [TestCase(0f)]
     public void FlyingTargetsHandleDirectlyVerticalAndCoincidentPositions(float height)
     {
-        player.SetState(player.FlyingIdleState);
+        player.SetState(player.FlyingMoveState);
         Transform target = Child("Target");
         target.position = player.visualsPivot.position + Vector3.up * height;
         visuals.target = target.gameObject;
@@ -737,7 +784,7 @@ public class FlyingStateTests
     }
 
     [Test]
-    public void DestroyingFlightTargetReturnsToUntargetedFacing()
+    public void DestroyingFlightTargetReturnsToUntargetedStateWithoutTurningIdleVisuals()
     {
         player.SetState(player.FlyingIdleState);
         Transform target = Child("Target");
@@ -750,7 +797,7 @@ public class FlyingStateTests
         player.SetFlyingVelocity(Vector3.back * 10f);
         visuals.FixedUpdateController();
         visuals.FixedUpdateController();
-        AssertVector(player.visualsPivot.forward, Vector3.back);
+        AssertVector(player.visualsPivot.forward, Vector3.forward);
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
             Is.SameAs(visuals.FlyingNotTargetedState));
     }
@@ -765,13 +812,13 @@ public class FlyingStateTests
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
         visuals.FixedUpdateController();
 
+        Quaternion previousFacing = player.visualsPivot.rotation;
         player.SetState(player.FlyingIdleState);
         visuals.FixedUpdateController();
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
             Is.SameAs(targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedState
                 : visuals.FlyingNotTargetedState));
-        if (targeted)
-            AssertVector(player.visualsPivot.forward, target.position.normalized);
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, previousFacing), Is.LessThan(0.01f));
 
         player.SetState(player.IdleState);
         visuals.FixedUpdateController();
@@ -786,6 +833,7 @@ public class FlyingStateTests
     [TestCase(true)]
     public void ToggleExitsEitherFlyingStateAndRestoresCameraAndGravity(bool exitWhileMoving)
     {
+        SetField(player, "flyingIdleFrictionModifier", 1f);
         AbstractCameraState originalCamera = camera.CurrentState;
         player.localVerticalSpeedAccumulator = -30f;
         ToggleFlight();
@@ -800,8 +848,8 @@ public class FlyingStateTests
             playerControls.Move = Vector2.up;
             player.FlyingIdleState.FixedUpdate();
             Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.FlyingMoveState));
-            // Build enough momentum to coast after the unchanged idle braking step.
-            for (int moveStep = 0; moveStep < 3; moveStep++)
+            // Build enough momentum to coast after the default idle braking step.
+            for (int moveStep = 0; moveStep < 10; moveStep++)
                 player.FlyingMoveState.FixedUpdate();
             Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtFlyingCameraState));
             playerControls.Move = Vector2.zero;
@@ -1051,14 +1099,15 @@ public class FlyingStateTests
         float firstSpeed = player.FlyingVelocity.magnitude;
         player.FlyingMoveState.FixedUpdate();
         Assert.That(player.FlyingVelocity.magnitude, Is.GreaterThan(firstSpeed));
-        Assert.That(player.FlyingVelocity.magnitude, Is.LessThan(FlyingMoveState.MaxFlyingSpeed));
+        Assert.That(player.FlyingVelocity.magnitude,
+            Is.LessThan(player.FlyingMoveAcceleration / player.FlyingMoveFrictionModifier));
 
         Vector3 previousVelocity = player.FlyingVelocity;
         cameraTransform.rotation = Quaternion.Euler(-35f, 132f, 15f);
-        float acceleration = player.FlyingMoveAcceleration *
-            (1f - previousVelocity.magnitude / FlyingMoveState.MaxFlyingSpeed);
         player.FlyingMoveState.FixedUpdate();
-        AssertVector(player.FlyingVelocity, previousVelocity + cameraTransform.forward * (acceleration * Time.fixedDeltaTime));
+        AssertVector(player.FlyingVelocity,
+            previousVelocity * (1f - player.FlyingMoveFrictionModifier * Time.fixedDeltaTime)
+            + cameraTransform.forward * (player.FlyingMoveAcceleration * Time.fixedDeltaTime));
         AssertVector(GetField<Vector3>(player, "localVelocity"), player.FlyingVelocity * Time.fixedDeltaTime);
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
         visuals.FixedUpdateController();
@@ -1069,6 +1118,7 @@ public class FlyingStateTests
     [Test]
     public void FlyingIdleDeceleratesWithoutAStopOnEntryAndEventuallyStopsExactly()
     {
+        SetField(player, "flyingIdleFrictionModifier", 1f);
         player.SetState(player.FlyingMoveState);
         playerControls.Move = Vector2.up;
         for (int i = 0; i < 30; i++)
@@ -1077,18 +1127,19 @@ public class FlyingStateTests
         playerControls.Move = Vector2.zero;
         player.FlyingMoveState.FixedUpdate();
         AssertVector(player.FlyingVelocity, previousVelocity - previousVelocity.normalized *
-            (FlyingIdleState.BrakingAcceleration * Time.fixedDeltaTime));
+            (player.FlyingIdleMinimumFrictionMagnitude * Time.fixedDeltaTime));
         AssertVector(GetField<Vector3>(player, "localVelocity"), player.FlyingVelocity * Time.fixedDeltaTime);
 
         cameraTransform.rotation = Quaternion.Euler(80f, 140f, 75f);
         previousVelocity = player.FlyingVelocity;
         player.FlyingIdleState.FixedUpdate();
         AssertVector(player.FlyingVelocity, previousVelocity - previousVelocity.normalized *
-            (FlyingIdleState.BrakingAcceleration * Time.fixedDeltaTime));
+            (player.FlyingIdleMinimumFrictionMagnitude * Time.fixedDeltaTime));
         AssertVector(player.MoveInputRotated3D, Vector3.zero);
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        Quaternion previousFacing = player.visualsPivot.rotation;
         visuals.FixedUpdateController();
-        AssertVector(player.visualsPivot.forward, previousVelocity.normalized);
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, previousFacing), Is.LessThan(0.01f));
 
         float previousSpeed = player.FlyingVelocity.magnitude;
         for (int i = 0; i < 200; i++)
@@ -1105,6 +1156,7 @@ public class FlyingStateTests
     [TestCase(true)]
     public void FlyingIdleBrakesFromLimitedEvadeExitSpeed(bool downwards)
     {
+        SetField(player, "flyingIdleFrictionModifier", 1f);
         player.SetState(player.FlyingIdleState);
         playerControls.Move = Vector2.right;
         AerialEvadeState evade = downwards ? player.AerialEvadeDownwardsState : player.AerialEvadeState;
@@ -1120,7 +1172,7 @@ public class FlyingStateTests
         AssertVector(player.FlyingVelocity, exitVelocity);
         player.FlyingIdleState.FixedUpdate();
         AssertVector(player.FlyingVelocity, exitVelocity - exitVelocity.normalized *
-            (FlyingIdleState.BrakingAcceleration * Time.fixedDeltaTime));
+            (player.FlyingIdleMinimumFrictionMagnitude * Time.fixedDeltaTime));
         AssertVector(GetField<Vector3>(player, "localVelocity"), player.FlyingVelocity * Time.fixedDeltaTime);
     }
 
@@ -1156,9 +1208,10 @@ public class FlyingStateTests
     [Test]
     public void ReenteringFlyingMoveAddsAccelerationToRemainingMomentum()
     {
+        SetField(player, "flyingIdleFrictionModifier", 1f);
         player.SetState(player.FlyingMoveState);
         playerControls.Move = Vector2.up;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 10; i++)
             player.FlyingMoveState.FixedUpdate();
         playerControls.Move = Vector2.zero;
         player.FlyingMoveState.FixedUpdate();
@@ -1167,9 +1220,9 @@ public class FlyingStateTests
         playerControls.Move = Vector2.left;
         player.FlyingIdleState.FixedUpdate();
         Assert.That(GetField<AbstractPlayerState>(player, "currentState"), Is.SameAs(player.FlyingMoveState));
-        float acceleration = player.FlyingMoveAcceleration *
-            (1f - previousVelocity.magnitude / FlyingMoveState.MaxFlyingSpeed);
-        AssertVector(player.FlyingVelocity, previousVelocity - cameraTransform.right * (acceleration * Time.fixedDeltaTime));
+        AssertVector(player.FlyingVelocity,
+            previousVelocity * (1f - player.FlyingMoveFrictionModifier * Time.fixedDeltaTime)
+            - cameraTransform.right * (player.FlyingMoveAcceleration * Time.fixedDeltaTime));
     }
 
     [Test]
@@ -1192,7 +1245,7 @@ public class FlyingStateTests
     [TestCase(75f)]
     [TestCase(100f)]
     [TestCase(150f)]
-    public void FlyingAccelerationFallsWithSpeedAndCapsTheWholeVelocity(float initialSpeed)
+    public void FlyingThrustStaysConstantWhileFrictionOpposesCurrentVelocity(float initialSpeed)
     {
         player.SetState(player.FlyingMoveState);
         cameraTransform.rotation = Quaternion.Euler(115f, 37f, 65f);
@@ -1200,64 +1253,82 @@ public class FlyingStateTests
         Vector3 initialVelocity = Vector3.up * initialSpeed;
         player.SetFlyingVelocity(initialVelocity);
         player.FlyingMoveState.FixedUpdate();
-        float acceleration = player.FlyingMoveAcceleration *
-            Mathf.Clamp01(1f - initialSpeed / FlyingMoveState.MaxFlyingSpeed);
         Vector3 direction = (cameraTransform.right + cameraTransform.forward).normalized;
-        Vector3 expected = Vector3.ClampMagnitude(initialVelocity + direction *
-            (acceleration * Time.fixedDeltaTime), FlyingMoveState.MaxFlyingSpeed);
+        Vector3 expected = initialVelocity * (1f - player.FlyingMoveFrictionModifier * Time.fixedDeltaTime)
+            + direction * (player.FlyingMoveAcceleration * Time.fixedDeltaTime);
         AssertVector(player.FlyingVelocity, expected);
-        Assert.That(player.FlyingVelocity.magnitude, Is.LessThanOrEqualTo(FlyingMoveState.MaxFlyingSpeed + 0.0001f));
+    }
+
+    [TestCase(40f, 0.8f, 0f, 50f)]
+    [TestCase(40f, 0.8f, 100f, 50f)]
+    [TestCase(20f, 0.8f, 0f, 25f)]
+    [TestCase(40f, 1.6f, 100f, 25f)]
+    public void FlyingSpeedConvergesToThrustFrictionBalance(
+        float acceleration, float frictionModifier, float initialSpeed, float terminalSpeed)
+    {
+        SetField(player, "flyingMoveAcceleration", acceleration);
+        SetField(player, "flyingMoveFrictionModifier", frictionModifier);
+        player.SetState(player.FlyingMoveState);
+        playerControls.Move = Vector2.up;
+        player.SetFlyingVelocity(cameraTransform.forward * initialSpeed);
+        for (int step = 0; step < 1000; step++)
+            player.FlyingMoveState.FixedUpdate();
+        Assert.That(player.FlyingVelocity.magnitude, Is.EqualTo(terminalSpeed).Within(0.001f));
+        AssertVector(player.FlyingVelocity.normalized, cameraTransform.forward);
     }
 
     [Test]
-    public void FlyingSpeedCapPreventsOvershootWithALargePhysicsStep()
+    public void EnteringFlyingMovePreservesInheritedVelocity()
+    {
+        player.SetState(player.FlyingIdleState);
+        Vector3 direction = new Vector3(2f, -3f, 1f).normalized;
+        player.SetFlyingVelocity(direction * 100f);
+        player.SetState(player.FlyingMoveState);
+        AssertVector(player.FlyingVelocity, direction * 100f);
+    }
+
+    [TestCase(0f, 1f, 200f, 0.02f, 0f)]
+    [TestCase(0.005f, 200f, 200f, 0.02f, 0f)]
+    [TestCase(0.2f, 200f, 200f, 0.02f, 0f)]
+    [TestCase(100f, 200f, 200f, 0.02f, 0f)]
+    [TestCase(100f, 50f, 200f, 0.02f, 0f)]
+    [TestCase(100f, 1f, 200f, 0.02f, 96f)]
+    [TestCase(100f, 3f, 200f, 0.02f, 94f)]
+    [TestCase(100f, 1f, 50f, 0.02f, 98f)]
+    [TestCase(2f, 0f, 20f, 0.02f, 1.6f)]
+    [TestCase(0.25f, 1f, 20f, 0.02f, 0f)]
+    [TestCase(100f, 1f, 200f, 0.01f, 98f)]
+    public void FlyingIdleEnforcesMinimumFrictionAndStopsWithoutReversing(
+        float initialSpeed, float frictionModifier, float minimumFriction, float deltaTime, float expectedSpeed)
     {
         float previousDeltaTime = Time.fixedDeltaTime;
         try
         {
-            Time.fixedDeltaTime = 10f;
-            player.SetState(player.FlyingMoveState);
-            playerControls.Move = Vector2.up;
-            player.SetFlyingVelocity(cameraTransform.forward * (FlyingMoveState.MaxFlyingSpeed * 0.9f));
-            player.FlyingMoveState.FixedUpdate();
-            AssertVector(player.FlyingVelocity, cameraTransform.forward * FlyingMoveState.MaxFlyingSpeed);
+            Time.fixedDeltaTime = deltaTime;
+            SetField(player, "flyingIdleFrictionModifier", frictionModifier);
+            SetField(player, "flyingIdleMinimumFrictionMagnitude", minimumFriction);
+            player.SetState(player.FlyingIdleState);
+            Vector3 direction = new Vector3(2f, -3f, 1f).normalized;
+            player.SetFlyingVelocity(direction * initialSpeed);
+            player.FlyingIdleState.FixedUpdate();
+            AssertVector(player.FlyingVelocity, direction * expectedSpeed);
+            AssertVector(GetField<Vector3>(player, "localVelocity"), player.FlyingVelocity * deltaTime);
+
+            for (int i = 0; i < 200; i++)
+            {
+                float previousSpeed = player.FlyingVelocity.magnitude;
+                player.FlyingIdleState.FixedUpdate();
+                Assert.That(player.FlyingVelocity.magnitude, Is.LessThanOrEqualTo(previousSpeed));
+                Assert.That(Vector3.Dot(player.FlyingVelocity, direction), Is.GreaterThanOrEqualTo(0f));
+            }
+            AssertVector(player.FlyingVelocity, Vector3.zero);
+            AssertVector(GetField<Vector3>(player, "localVelocity"), Vector3.zero);
+            AssertVector(GetField<Vector3>(player, "previousAppliedDisplacement"), Vector3.zero);
         }
         finally
         {
             Time.fixedDeltaTime = previousDeltaTime;
         }
-    }
-
-    [Test]
-    public void EnteringFlyingMoveCapsInheritedSpeedWithoutChangingItsDirection()
-    {
-        player.SetState(player.FlyingIdleState);
-        Vector3 direction = new Vector3(2f, -3f, 1f).normalized;
-        player.SetFlyingVelocity(direction * (FlyingMoveState.MaxFlyingSpeed * 2f));
-        player.SetState(player.FlyingMoveState);
-        AssertVector(player.FlyingVelocity, direction * FlyingMoveState.MaxFlyingSpeed);
-    }
-
-    [TestCase(0.005f)]
-    [TestCase(0.2f)]
-    [TestCase(100f)]
-    public void FlyingIdleBrakesAtMaximumSpeedAndStopsWithoutReversing(float initialSpeed)
-    {
-        player.SetState(player.FlyingIdleState);
-        Vector3 direction = new Vector3(2f, -3f, 1f).normalized;
-        player.SetFlyingVelocity(direction * initialSpeed);
-        int ticks = Mathf.CeilToInt(initialSpeed / (FlyingIdleState.BrakingAcceleration * Time.fixedDeltaTime)) + 2;
-        float previousSpeed = initialSpeed;
-        for (int i = 0; i < ticks; i++)
-        {
-            player.FlyingIdleState.FixedUpdate();
-            Assert.That(player.FlyingVelocity.magnitude, Is.LessThanOrEqualTo(previousSpeed));
-            Assert.That(Vector3.Dot(player.FlyingVelocity, direction), Is.GreaterThanOrEqualTo(0f));
-            previousSpeed = player.FlyingVelocity.magnitude;
-        }
-        AssertVector(player.FlyingVelocity, Vector3.zero);
-        AssertVector(GetField<Vector3>(player, "localVelocity"), Vector3.zero);
-        AssertVector(GetField<Vector3>(player, "previousAppliedDisplacement"), Vector3.zero);
     }
 
     [TestCase(0)]
@@ -1291,14 +1362,15 @@ public class FlyingStateTests
     [Test]
     public void FullPhysicsPipelineRetainsVelocityAndIntegratesAccelerationExactlyOncePerTick()
     {
+        SetField(player, "flyingIdleFrictionModifier", 1f);
         SetField(player, "playerCollider", null);
         player.SetState(player.FlyingMoveState);
         playerControls.Move = Vector2.up;
         float expectedSpeed = 0f;
         for (int i = 0; i < 20; i++)
         {
-            expectedSpeed += player.FlyingMoveAcceleration *
-                (1f - expectedSpeed / FlyingMoveState.MaxFlyingSpeed) * Time.fixedDeltaTime;
+            expectedSpeed += (player.FlyingMoveAcceleration
+                - expectedSpeed * player.FlyingMoveFrictionModifier) * Time.fixedDeltaTime;
             Invoke(player, "FixedUpdateV1");
             AssertVector(player.FlyingVelocity, cameraTransform.forward * expectedSpeed);
             AssertVector(GetField<Vector3>(player, "previousAppliedDisplacement"),
@@ -1306,7 +1378,7 @@ public class FlyingStateTests
         }
         playerControls.Move = Vector2.zero;
         Invoke(player, "FixedUpdateV1");
-        expectedSpeed -= FlyingIdleState.BrakingAcceleration * Time.fixedDeltaTime;
+        expectedSpeed -= player.FlyingIdleMinimumFrictionMagnitude * Time.fixedDeltaTime;
         AssertVector(player.FlyingVelocity, cameraTransform.forward * expectedSpeed);
         Assert.That(player.CurrentDisplacementApplyMode, Is.EqualTo(PlayerController.DisplacementApplyMode.Inertia));
     }

@@ -24,9 +24,14 @@ public class FlyingNotTargetedFacingState : AbstractPlayerVisualsRotationState
             return;
         }
 
+        // Idle flight keeps its last visual facing even while coasting.
+        if (player.IsFlyingIdle)
+        {
+            return;
+        }
+
         Vector3 cameraUp = player.Direction != null ? player.Direction.up : Vector3.up;
         // Moving flight faces WASD input, ignoring Space's camera-relative ascent.
-        // Idle continues to follow residual velocity while coasting.
         Vector3 facing = player.IsFlyingDashing ? player.FlyingDashState.MovementDirection
             : player.IsFlyingMoving ? player.FlyingMoveFacingDirection : player.FlyingVelocity;
         Controller.RotateToFacing3D(facing, cameraUp);

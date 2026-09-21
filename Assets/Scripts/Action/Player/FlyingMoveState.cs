@@ -4,8 +4,6 @@ public class FlyingMoveState : AbstractPlayerState
 {
     public override bool AllowsAiming => true;
 
-    public const float MaxFlyingSpeed = 50f;
-
     public const string AnimationName = "FlyingMovev2";
 
     public FlyingMoveState(PlayerController controller) : base(controller)
@@ -15,7 +13,6 @@ public class FlyingMoveState : AbstractPlayerState
     public override void OnEnter()
     {
         Controller.UpdateAiming();
-        Controller.SetFlyingVelocity(Vector3.ClampMagnitude(Controller.FlyingVelocity, MaxFlyingSpeed));
         Controller.ResetAerialJumpCounter();
         Controller.PlayFlyingLocomotionAnimation(AnimationName);
     }
@@ -46,10 +43,16 @@ public class FlyingMoveState : AbstractPlayerState
 
         Controller.UpdateFlyingAttackAnimation("FlyingMove");
 
-        float acceleration = Controller.FlyingMoveAcceleration *
-            Mathf.Clamp01(1f - Controller.FlyingVelocity.magnitude / MaxFlyingSpeed);
-        // Inertia mode interprets input * acceleration as world acceleration.
-        Controller.MoveWASDKinematic(Controller.MoveInputRotated3D, acceleration);
+        Controller.SetFlyingVelocity(CalculateFlyingVelocity());
+    }
+
+    private Vector3 CalculateFlyingVelocity()
+    {
+        Vector3 velocity = Controller.FlyingVelocity;
+        Vector3 thrust = Controller.MoveInputRotated3D * Controller.FlyingMoveAcceleration;
+        Vector3 friction = velocity * Controller.FlyingMoveFrictionModifier;
+        // At full input, thrust balances friction at acceleration / friction modifier.
+        return velocity + (thrust - friction) * Time.fixedDeltaTime;
     }
 
     public override void OnExit()

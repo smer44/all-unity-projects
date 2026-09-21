@@ -2,9 +2,6 @@ using UnityEngine;
 
 public class FlyingDashState : AbstractPlayerState
 {
-    public const float Acceleration = 300f;
-    public const float MaxFlyingSpeed = 100f;
-
     public override bool AllowsAiming => true;
     public bool IsDirectionLocked => elapsedTime < lockDuration;
     public Vector3 MovementDirection { get; private set; }
@@ -30,7 +27,7 @@ public class FlyingDashState : AbstractPlayerState
         elapsedTime = 0f;
         lockDuration = Mathf.Max(0f, Controller.FlyingDashLockDuration);
         // Carry speed into the dash, aligned with its captured world direction.
-        Controller.SetFlyingVelocity(MovementDirection * Mathf.Min(Controller.FlyingVelocity.magnitude, MaxFlyingSpeed));
+        Controller.SetFlyingVelocity(MovementDirection * Controller.FlyingVelocity.magnitude);
         Controller.ResetAerialJumpCounter();
         Controller.PlayFlyingLocomotionAnimation("FlyingMove");
     }
@@ -69,10 +66,16 @@ public class FlyingDashState : AbstractPlayerState
         }
 
         Controller.UpdateFlyingAttackAnimation("FlyingMove");
-        float speed = Mathf.MoveTowards(Controller.FlyingVelocity.magnitude, MaxFlyingSpeed,
-            Acceleration * Time.fixedDeltaTime);
-        Controller.SetFlyingVelocity(MovementDirection * speed);
+        Controller.SetFlyingVelocity(CalculateFlyingVelocity());
         elapsedTime += Time.fixedDeltaTime;
+    }
+
+    private Vector3 CalculateFlyingVelocity()
+    {
+        Vector3 velocity = Controller.FlyingVelocity;
+        Vector3 thrust = MovementDirection * Controller.FlyingDashAcceleration;
+        Vector3 friction = velocity * Controller.FlyingDashFrictionModifier;
+        return velocity + (thrust - friction) * Time.fixedDeltaTime;
     }
 
     public override void OnExit()
