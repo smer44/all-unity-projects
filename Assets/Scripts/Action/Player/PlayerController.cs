@@ -739,7 +739,8 @@ public class PlayerController : MonoBehaviour
         MoveInputRaw = new Vector2(MoveInputRaw3D.x, MoveInputRaw3D.z);
         MoveInputRotated3D = CameraFacingCalc.RotateFlyingInput(MoveInputRaw3D, Direction);
         // Cache camera-relative WASD separately so Space affects motion, not moving-flight facing.
-        FlyingMoveFacingDirection = CameraFacingCalc.RotateFlyingInput(MoveInputRaw, Direction);
+        //FlyingMoveFacingDirection = CameraFacingCalc.RotateFlyingInput(MoveInputRaw, Direction);
+        FlyingMoveFacingDirection = MoveInputRotated3D;
     }
 
 

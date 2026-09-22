@@ -2407,6 +2407,10 @@ PrefabInstance:
       value: 800
       objectReference: {fileID: 0}
     - target: {fileID: 5378336096252629190, guid: 9d5c9bcba624067439afaff98bf9ccbc, type: 3}
+      propertyPath: flyingDashLockDuration
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5378336096252629190, guid: 9d5c9bcba624067439afaff98bf9ccbc, type: 3}
       propertyPath: flyingMoveAcceleration
       value: 160
       objectReference: {fileID: 0}
@@ -2420,15 +2424,15 @@ PrefabInstance:
       objectReference: {fileID: 245922448}
     - target: {fileID: 5378336096252629190, guid: 9d5c9bcba624067439afaff98bf9ccbc, type: 3}
       propertyPath: flyingDashFrictionModifier
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 5378336096252629190, guid: 9d5c9bcba624067439afaff98bf9ccbc, type: 3}
       propertyPath: flyingIdleFrictionModifier
-      value: 2.5
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 5378336096252629190, guid: 9d5c9bcba624067439afaff98bf9ccbc, type: 3}
       propertyPath: flyingMoveFrictionModifier
-      value: 1.5
+      value: 1.3
       objectReference: {fileID: 0}
     - target: {fileID: 5378336096252629190, guid: 9d5c9bcba624067439afaff98bf9ccbc, type: 3}
       propertyPath: flyingIdleMinimumFrictionMagnitude

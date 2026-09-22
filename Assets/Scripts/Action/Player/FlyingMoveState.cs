@@ -4,7 +4,7 @@ public class FlyingMoveState : AbstractPlayerState
 {
     public override bool AllowsAiming => true;
 
-    public const string AnimationName = "FlyingMovev2";
+    public const string AnimationName = "FlyingMove";//"FlyingMovev2";
 
     public FlyingMoveState(PlayerController controller) : base(controller)
     {

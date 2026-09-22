@@ -162,6 +162,57 @@ public class PlayerVisualsRotationController : MonoBehaviour
             rotationSpeed);
     }
 
+            //if(cameraTransform. y < 0)
+        //{
+        //    referenceUp = - referenceUp;
+        //}
+
+        //Quaternion cameraForwardQ = Quaternion.LookRotation(cameraTransform, Vector3.forward);
+
+    public void RotateToFacing3Dv2(Vector3 rotatedFacing, Vector3 cameraForward, Vector3 cameraUp)
+    {
+         Vector3 cameraBack = -cameraForward;        
+
+        float alignment = Mathf.Abs(Vector3.Dot(rotatedFacing.normalized, cameraForward));
+        Vector3 referenceUp = Vector3.Slerp(cameraBack, cameraUp, alignment).normalized;
+
+        if (Vector3.Dot(cameraUp, Vector3.up) < 0){
+            //Makes no effect : 
+            //referenceUp.y = - referenceUp.y;
+
+        } // Check if camera is upside down
+
+        
+        
+        FacingCalc.RotateToFacing3D(
+            playerController.visualsPivot,
+            rotatedFacing,
+            referenceUp,
+            rotationSpeed);
+
+        
+
+
+    }
+
+
+    public void RotateToFacing3DTargetedUpwardsChange(Vector3 rotatedFacing, Vector3 targetPosition, Vector3 cameraUp)
+    {
+        //if (playerController == null || playerController.visualsPivot == null)
+        //   return;
+
+        Vector3 directionToTarget = targetPosition - playerController.visualsPivot.position;
+
+        if (directionToTarget.sqrMagnitude < 0.0001f)
+            return;
+
+        directionToTarget.Normalize();
+
+        RotateToFacing3Dv2(rotatedFacing, directionToTarget,cameraUp);
+    }
+
+
+
     public bool TryGetPlanarTargetFacing(out Vector2 facing)
     {
         facing = Vector2.zero;

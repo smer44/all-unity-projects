@@ -34,7 +34,10 @@ public class FlyingNotTargetedFacingState : AbstractPlayerVisualsRotationState
         // Moving flight faces WASD input, ignoring Space's camera-relative ascent.
         Vector3 facing = player.IsFlyingDashing ? player.FlyingDashState.MovementDirection
             : player.IsFlyingMoving ? player.FlyingMoveFacingDirection : player.FlyingVelocity;
-        Controller.RotateToFacing3D(facing, cameraUp);
+
+        //Controller.RotateToFacing3D(facing, cameraUp);
+        Transform cameraTransform = player.PlayerCameraController.GetDirection();
+        Controller.RotateToFacing3Dv2(facing,cameraTransform.forward,cameraTransform.up );
     }
 
     public override void OnExit()

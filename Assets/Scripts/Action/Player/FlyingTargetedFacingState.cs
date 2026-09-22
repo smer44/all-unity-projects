@@ -31,8 +31,13 @@ public class FlyingTargetedFacingState : AbstractPlayerVisualsRotationState
 
         if (Controller.TryGetTargetFacing3D(out Vector3 facing))
         {
-            Vector3 cameraUp = player.Direction != null ? player.Direction.up : Vector3.up;
-            Controller.RotateToFacing3D(facing, cameraUp);
+            //Vector3 cameraUp = player.Direction != null ? player.Direction.up : Vector3.up;
+            //Controller.RotateToFacing3D(facing, cameraUp);
+            Vector3 targetPosition = Vector3.zero;
+            Transform cameraTransform = player.PlayerCameraController.GetDirection();
+
+            Controller.RotateToFacing3DTargetedUpwardsChange(facing,targetPosition, cameraTransform.up );
+
         }
     }
 
