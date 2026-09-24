@@ -162,11 +162,15 @@ public class FlyingStateTests
         AssertVector(player.FlyingVelocity, cameraTransform.up * AerialEvadeState.MoveSpeed);
     }
 
-    [TestCase(0f, 0f, false)]
-    [TestCase(1f, 1f, false)]
-    [TestCase(-1f, -1f, true)]
-    [TestCase(0f, 0f, true)]
-    public void SpaceKeyboardBindingCombinesAxesEquallyAndDashDoesNotCancelAscent(float x, float z, bool dash)
+    [TestCase(0f, 0f, false, false)]
+    [TestCase(1f, 1f, false, false)]
+    [TestCase(-1f, -1f, true, false)]
+    [TestCase(0f, 0f, true, false)]
+    [TestCase(0f, 0f, false, true)]
+    [TestCase(1f, 1f, false, true)]
+    [TestCase(-1f, -1f, true, true)]
+    [TestCase(0f, 0f, true, true)]
+    public void FlightVerticalKeyboardBindingsCombineAxesEquallyAndDashDoesNotCancelThem(float x, float z, bool dash, bool descend)
     {
         var fixtureType = Assembly.Load("Unity.InputSystem.TestFramework")
             .GetType("UnityEngine.InputSystem.InputTestFixture");
@@ -176,18 +180,21 @@ public class FlyingStateTests
         try
         {
             Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
-            var keys = new System.Collections.Generic.List<Key> { Key.Space };
+            var keys = new System.Collections.Generic.List<Key> { descend ? Key.LeftCtrl : Key.Space };
             if (x != 0f) keys.Add(x > 0f ? Key.D : Key.A);
             if (z != 0f) keys.Add(z > 0f ? Key.W : Key.S);
-            if (dash) keys.Add(Key.LeftCtrl);
+            if (dash) keys.Add(Key.LeftAlt);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(keys.ToArray()));
             InputSystem.Update();
-            AssertVector(controls.GetFlyingMove3D(), new Vector3(x, 1f, z).normalized);
+            AssertVector(controls.GetFlyingMove3D(), new Vector3(x, descend ? -1f : 1f, z).normalized);
             Assert.That(controls.GetMove2D(), Is.EqualTo(new Vector2(x, z).normalized));
             Assert.That(controls.IsFlyingDashPressed(), Is.EqualTo(dash));
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftAlt));
             InputSystem.Update();
             AssertVector(controls.GetFlyingMove3D(), Vector3.zero);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Space, Key.LeftCtrl, Key.D));
+            InputSystem.Update();
+            AssertVector(controls.GetFlyingMove3D(), Vector3.right);
         }
         finally
         {
@@ -334,7 +341,8 @@ public class FlyingStateTests
         player.FlyingDashState.FixedUpdate();
         visuals.FixedUpdateController();
         visuals.FixedUpdateController();
-        AssertVector(player.visualsPivot.forward, (target.position - player.visualsPivot.position).normalized);
+        AssertVector(player.visualsPivot.forward, player.FlyingMoveFacingDirection.normalized);
+        AssertFlightDownToward(target.position);
     }
 
     [Test]
@@ -367,22 +375,29 @@ public class FlyingStateTests
         Assert.That(player.IsAerialEvading, Is.True);
     }
 
-    [Test]
-    public void OnlyLeftControlStartsAndHoldsTheFlyingDash()
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public void OnlyLeftAltStartsAndHoldsTheFlyingDash(int controlsSource)
     {
         var fixtureType = Assembly.Load("Unity.InputSystem.TestFramework")
             .GetType("UnityEngine.InputSystem.InputTestFixture");
         object fixture = System.Activator.CreateInstance(fixtureType);
         fixtureType.GetMethod("Setup").Invoke(fixture, null);
-        Action3DButtonControls controls = ScriptableObject.CreateInstance<Action3DButtonControls>();
+        Action3DButtonControls controls = controlsSource == 0
+            ? ScriptableObject.CreateInstance<Action3DButtonControls>()
+            : Object.Instantiate(AssetDatabase.LoadAssetAtPath<Action3DButtonControls>(controlsSource == 1
+                ? "Assets/Scripts/Action/Player/DefaultActionControlls.asset"
+                : "Assets/Scenes/StressTestControlls/Action3DButtonControls.asset"));
         try
         {
             Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.RightCtrl));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl, Key.RightCtrl, Key.RightAlt));
             InputSystem.Update();
             Assert.That(controls.WasFlyingDashPressed(), Is.False);
             Assert.That(controls.IsFlyingDashPressed(), Is.False);
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl));
+            AssertVector(controls.GetFlyingMove3D(), Vector3.down);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftAlt));
             InputSystem.Update();
             Assert.That(controls.WasFlyingDashPressed(), Is.True);
             Assert.That(controls.IsFlyingDashPressed(), Is.True);
@@ -395,6 +410,75 @@ public class FlyingStateTests
         }
         finally
         {
+            Object.DestroyImmediate(controls);
+            fixtureType.GetMethod("TearDown").Invoke(fixture, null);
+        }
+    }
+
+    [TestCase(false, 0f)]
+    [TestCase(true, 135f)]
+    public void ControlDescendsAndAltDashesWithoutChangingGroundRunMode(bool initiallyMoving, float pitch)
+    {
+        var fixtureType = Assembly.Load("Unity.InputSystem.TestFramework")
+            .GetType("UnityEngine.InputSystem.InputTestFixture");
+        object fixture = System.Activator.CreateInstance(fixtureType);
+        fixtureType.GetMethod("Setup").Invoke(fixture, null);
+        Action3DButtonControls controls = ScriptableObject.CreateInstance<Action3DButtonControls>();
+        try
+        {
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            SetField(player, "buttonControls", controls);
+            SetField(player, "isRunMode", true);
+            SetField(player, "flyingDashLockDuration", 0f);
+            player.SetState(initiallyMoving ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState);
+            cameraTransform.rotation = Quaternion.Euler(pitch, 37f, 65f);
+
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl, Key.D));
+            InputSystem.Update();
+            Invoke(player, "UpdateRunWalkMode");
+            Invoke(player, "UpdateFlyingDash");
+            GetField<AbstractPlayerState>(player, "currentState").FixedUpdate();
+            Vector3 descent = (cameraTransform.right - cameraTransform.up).normalized;
+            Assert.That(player.IsFlyingMoving, Is.True);
+            AssertVector(player.MoveInputRotated3D, descent);
+            AssertVector(player.FlyingVelocity.normalized, descent);
+
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl, Key.D, Key.LeftAlt));
+            InputSystem.Update();
+            Invoke(player, "UpdateRunWalkMode");
+            Invoke(player, "UpdateFlyingDash");
+            Assert.That(player.IsFlyingDashing, Is.True);
+            AssertVector(player.FlyingDashState.MovementDirection, descent);
+            Assert.That(GetField<bool>(player, "isRunMode"), Is.True);
+
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl, Key.LeftAlt));
+            InputSystem.Update();
+            player.FlyingDashState.FixedUpdate();
+            Assert.That(player.IsFlyingDashing, Is.True);
+            AssertVector(player.FlyingDashState.MovementDirection, -cameraTransform.up);
+
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftCtrl));
+            InputSystem.Update();
+            player.FlyingDashState.FixedUpdate();
+            Assert.That(player.IsFlyingMoving, Is.True);
+            AssertVector(player.MoveInputRotated3D, -cameraTransform.up);
+
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            InputSystem.Update();
+            player.FlyingMoveState.FixedUpdate();
+            Assert.That(player.IsFlyingIdle, Is.True);
+
+            player.SetState(player.IdleState);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.LeftAlt));
+            InputSystem.Update();
+            Invoke(player, "UpdateRunWalkMode");
+            Invoke(player, "UpdateFlyingDash");
+            Assert.That(GetField<bool>(player, "isRunMode"), Is.False);
+            Assert.That(player.IsFlying, Is.False);
+        }
+        finally
+        {
+            SetField(player, "buttonControls", playerControls);
             Object.DestroyImmediate(controls);
             fixtureType.GetMethod("TearDown").Invoke(fixture, null);
         }
@@ -503,9 +587,79 @@ public class FlyingStateTests
         AssertVector(player.visualsPivot.forward, inputDirection.normalized);
     }
 
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
+    public void FlightTargetSelectionUsesMovementForwardAndActualTargetPosition(bool moving, bool selectBeforeFlight)
+    {
+        player.visualsPivot.position = new Vector3(23f, -11f, 17f);
+        cameraTransform.rotation = Quaternion.Euler(35f, 37f, 65f);
+        playerControls.Move = moving ? new Vector2(1f, 1f).normalized : Vector2.zero;
+        Transform target = Child("Selected flight target");
+        target.position = player.visualsPivot.position + new Vector3(8f, 12f, 5f);
+        Transform selectorObject = Child("Flight target selector");
+        selectorObject.SetParent(player.transform, false);
+        var selector = selectorObject.gameObject.AddComponent<TargetSelector>();
+        // This fixture's parent hierarchy is inactive, so wire the controller explicitly.
+        SetField(selector, "rotationController", visuals);
+        SetField(selector, "highlightSelection", false);
+        selector.UseMouseInput = false;
+        Invoke(selector, "Awake");
+        if (selectBeforeFlight)
+            selector.SetSelectedTarget(target.gameObject);
+
+        player.SetState(moving ? (AbstractPlayerState)player.FlyingMoveState : player.FlyingIdleState);
+        player.UpdateFlyingMoveInput();
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        Vector3 expectedForward = moving ? player.FlyingMoveFacingDirection.normalized : player.visualsPivot.forward;
+        if (!selectBeforeFlight)
+        {
+            visuals.FixedUpdateController();
+            selector.SetSelectedTarget(target.gameObject);
+        }
+
+        foreach (Vector3 offset in new[] { new Vector3(8f, 12f, 5f), new Vector3(-7f, -3f, 9f) })
+        {
+            target.position = player.visualsPivot.position + offset;
+            visuals.FixedUpdateController();
+            Assert.That(visuals.target, Is.SameAs(target.gameObject));
+            Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"), Is.SameAs(visuals.FlyingTargetedDownwardState));
+            AssertVector(player.visualsPivot.forward, expectedForward);
+            AssertFlightDownToward(target.position);
+        }
+
+        selector.SetSelectedTarget(null);
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"), Is.SameAs(visuals.FlyingNonTargetedDownwardState));
+    }
+
+    [TestCase(-10f, false)]
+    [TestCase(0f, false)]
+    [TestCase(10f, false)]
+    [TestCase(-10f, true)]
+    [TestCase(0f, true)]
+    [TestCase(10f, true)]
+    public void FlightTargetAlongMovementKeepsStableRollWithoutRequiringACamera(float targetDistance, bool withoutCamera)
+    {
+        player.SetState(player.FlyingMoveState);
+        playerControls.Move = Vector2.right;
+        player.UpdateFlyingMoveInput();
+        player.visualsPivot.rotation = Quaternion.LookRotation(Vector3.right, new Vector3(0f, 1f, 1f).normalized);
+        Transform target = Child("Collinear target");
+        target.position = player.visualsPivot.position + Vector3.right * targetDistance;
+        visuals.target = target.gameObject;
+        if (withoutCamera)
+            SetField(player, "directionPointer", null);
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        Quaternion before = player.visualsPivot.rotation;
+        visuals.FixedUpdateController();
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, before), Is.LessThan(0.01f));
+    }
+
     [TestCase(false)]
     [TestCase(true)]
-    public void FlyingIdleKeepsItsFacingWhileCoastingAndAfterStopping(bool targeted)
+    public void FlyingIdleKeepsItsForwardWhileCoastingAndAfterStopping(bool targeted)
     {
         SetField(player, "flyingIdleFrictionModifier", 1f);
         player.SetState(player.FlyingMoveState);
@@ -528,22 +682,27 @@ public class FlyingStateTests
             player.FlyingIdleState.FixedUpdate();
             visuals.FixedUpdateController();
             Invoke(visuals, "LateUpdate");
-            Assert.That(Quaternion.Angle(player.visualsPivot.rotation, lastFacing), Is.LessThan(0.01f));
+            AssertVector(player.visualsPivot.forward, lastFacing * Vector3.forward);
+            if (targeted)
+                AssertFlightDownToward(target.position);
+            else
+                Assert.That(Quaternion.Angle(player.visualsPivot.rotation, lastFacing), Is.LessThan(0.01f));
         }
         AssertVector(player.FlyingVelocity, Vector3.zero);
         cameraTransform.rotation = Quaternion.Euler(125f, 20f, 60f);
         visuals.FixedUpdateController();
-        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, lastFacing), Is.LessThan(0.01f));
+        AssertVector(player.visualsPivot.forward, lastFacing * Vector3.forward);
     }
 
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
-    public void AerialStatesTrackTargetsUnlessIdleOrRotationIsFrozen(int stateIndex)
+    public void AerialStatesKeepMovementHeadingAndRollTowardTargetsUnlessRotationIsFrozen(int stateIndex)
     {
         playerControls.Move = Vector2.right;
         player.SetState(GetAerialState(stateIndex));
+        player.UpdateFlyingMoveInput();
         player.visualsPivot.position = new Vector3(7f, 11f, -4f);
         Transform target = Child("Target");
         visuals.target = target.gameObject;
@@ -556,11 +715,13 @@ public class FlyingStateTests
             target.position = player.visualsPivot.position + offset;
             visuals.FixedUpdateController();
             Invoke(visuals, "LateUpdate");
-            AssertVector(player.visualsPivot.forward, stateIndex == 1 ? offset.normalized : entryFacing);
+            AssertVector(player.visualsPivot.forward, stateIndex == 1 ? player.FlyingMoveFacingDirection.normalized : entryFacing);
+            if (stateIndex < 2)
+                AssertFlightDownToward(target.position);
             AssertVector(player.FlyingVelocity, velocity);
             Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
                 Is.SameAs(stateIndex < 2
-                    ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedState
+                    ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedDownwardState
                     : visuals.FreezeRotationState));
         }
     }
@@ -580,18 +741,20 @@ public class FlyingStateTests
         visuals.FixedUpdateController();
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
             Is.SameAs(stateIndex < 2
-                ? (AbstractPlayerVisualsRotationState)visuals.FlyingNotTargetedState
+                ? (AbstractPlayerVisualsRotationState)visuals.FlyingNonTargetedDownwardState
                 : visuals.FreezeRotationState));
 
         Transform target = Child("Target");
         target.position = new Vector3(-10f, 10f, -10f);
         visuals.target = target.gameObject;
-        // Like ground targeting, one tick switches states and the next turns the visuals.
+        // Selection changes apply before the facing update; a rotation freeze still wins.
         visuals.FixedUpdateController();
         visuals.FixedUpdateController();
         Invoke(visuals, "LateUpdate");
-        Vector3 targetedFacing = target.position.normalized;
+        Vector3 targetedFacing = player.FlyingMoveFacingDirection.normalized;
         AssertVector(player.visualsPivot.forward, stateIndex == 1 ? targetedFacing : entryFacing);
+        if (stateIndex < 2)
+            AssertFlightDownToward(target.position);
 
         visuals.target = null;
         visuals.FixedUpdateController();
@@ -599,7 +762,7 @@ public class FlyingStateTests
         Invoke(visuals, "LateUpdate");
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
             Is.SameAs(stateIndex < 2
-                ? (AbstractPlayerVisualsRotationState)visuals.FlyingNotTargetedState
+                ? (AbstractPlayerVisualsRotationState)visuals.FlyingNonTargetedDownwardState
                 : visuals.FreezeRotationState));
         Vector3 expected = stateIndex == 1 ? Vector3.right : entryFacing;
         AssertVector(player.visualsPivot.forward, expected);
@@ -607,7 +770,7 @@ public class FlyingStateTests
 
     [TestCase(false)]
     [TestCase(true)]
-    public void TargetedEvadesKeepFacingInIdleAndResumeTrackingWhenMoving(bool downwards)
+    public void TargetedEvadesFreezeRotationThenResumeMovementHeadingAndTargetRoll(bool downwards)
     {
         playerControls.Move = Vector2.right;
         AerialEvadeState evade = downwards ? player.AerialEvadeDownwardsState : player.AerialEvadeState;
@@ -633,13 +796,16 @@ public class FlyingStateTests
 
         player.SetState(player.FlyingIdleState);
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
-            Is.SameAs(visuals.FlyingTargetedState));
+            Is.SameAs(visuals.FlyingTargetedDownwardState));
         SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
         visuals.FixedUpdateController();
-        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, entryRotation), Is.LessThan(0.01f));
+        AssertVector(player.visualsPivot.forward, entryRotation * Vector3.forward);
+        AssertFlightDownToward(target.position);
         player.SetState(player.FlyingMoveState);
+        player.UpdateFlyingMoveInput();
         visuals.FixedUpdateController();
-        AssertVector(player.visualsPivot.forward, target.position.normalized);
+        AssertVector(player.visualsPivot.forward, player.FlyingMoveFacingDirection.normalized);
+        AssertFlightDownToward(target.position);
     }
 
     [TestCase(0)]
@@ -647,12 +813,15 @@ public class FlyingStateTests
     [TestCase(2)]
     [TestCase(3)]
     [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
     public void RotationFreezeTimesOutAndRestoresTheExactPreviousFacingState(int stateIndex)
     {
         var previousState = new AbstractPlayerVisualsRotationState[]
         {
             visuals.SurfaceNotTargetedState, visuals.SurfaceTargetedState, visuals.WaterNotTargetedState,
-            visuals.FlyingNotTargetedState, visuals.FlyingTargetedState
+            visuals.FlyingNonTargetedDownwardState, visuals.FlyingTargetedDownwardState, visuals.FlyingTargetedForwardState,
+            visuals.FlyingNonTargetedForwardState
         }[stateIndex];
         visuals.SetState(previousState);
         player.visualsPivot.SetParent(player.transform);
@@ -780,7 +949,8 @@ public class FlyingStateTests
         if (height == 0f)
             Assert.That(Quaternion.Angle(player.visualsPivot.rotation, before), Is.LessThan(0.01f));
         else
-            AssertVector(player.visualsPivot.forward, Vector3.up * height);
+            AssertFlightDownToward(target.position);
+        AssertVector(player.visualsPivot.forward, before * Vector3.forward);
     }
 
     [Test]
@@ -799,7 +969,7 @@ public class FlyingStateTests
         visuals.FixedUpdateController();
         AssertVector(player.visualsPivot.forward, Vector3.forward);
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
-            Is.SameAs(visuals.FlyingNotTargetedState));
+            Is.SameAs(visuals.FlyingNonTargetedDownwardState));
     }
 
     [TestCase(false)]
@@ -816,9 +986,11 @@ public class FlyingStateTests
         player.SetState(player.FlyingIdleState);
         visuals.FixedUpdateController();
         Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
-            Is.SameAs(targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedState
-                : visuals.FlyingNotTargetedState));
-        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, previousFacing), Is.LessThan(0.01f));
+            Is.SameAs(targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedDownwardState
+                : visuals.FlyingNonTargetedDownwardState));
+        AssertVector(player.visualsPivot.forward, previousFacing * Vector3.forward);
+        if (targeted)
+            AssertFlightDownToward(target.position);
 
         player.SetState(player.IdleState);
         visuals.FixedUpdateController();
@@ -1506,6 +1678,273 @@ public class FlyingStateTests
         Assert.That(player.IsFlying, Is.True);
     }
 
+    [TestCase(1f, 0f, 0f, 0f, false)]
+    [TestCase(-1f, 0f, 135f, 65f, false)]
+    [TestCase(0f, 1f, 0f, 0f, false)]
+    [TestCase(0f, -1f, 135f, 65f, false)]
+    [TestCase(1f, 1f, 180f, 180f, false)]
+    [TestCase(0f, 0f, 90f, 33f, true)]
+    [TestCase(1f, 0f, -90f, 45f, true)]
+    [TestCase(1f, -1f, 135f, 65f, true)]
+    public void NonTargetedFlyingShotUsesMovementUpAndTheNormalFlightDownAsForward(float x, float z, float pitch, float roll, bool ascend)
+    {
+        PrepareFlyingAttack(true, 1);
+        cameraTransform.rotation = Quaternion.Euler(pitch, 37f, roll);
+        playerControls.Move = new Vector2(x, z).normalized;
+        playerControls.JumpPressed = ascend;
+        player.FlyingMoveState.FixedUpdate();
+        Quaternion entryRotation = player.visualsPivot.rotation;
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingNonTargetedDownwardState));
+        Vector3 flightDown = -player.visualsPivot.up;
+        Vector3 movement = player.FlyingMoveFacingDirection.normalized;
+        AssertVector(player.visualsPivot.forward, movement);
+        if (!ascend && z == 0f)
+            AssertVector(flightDown, cameraTransform.forward);
+        else if (!ascend && x == 0f)
+            AssertVector(flightDown, -cameraTransform.up);
+
+        // Use a different starting pose so the result cannot come from the current body's down.
+        player.visualsPivot.rotation = entryRotation;
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingNonTargetedForwardState));
+        AssertVector(player.visualsPivot.up, movement);
+        AssertVector(player.visualsPivot.forward, flightDown);
+    }
+
+    [Test]
+    public void NonTargetedFlyingShotSmoothlyEntersAndReturnsToDownwardAfterFinishing()
+    {
+        PrepareFlyingAttack(true, 1);
+        playerControls.Move = Vector2.right;
+        player.FlyingMoveState.FixedUpdate();
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        visuals.FixedUpdateController();
+        Quaternion downwardRotation = player.visualsPivot.rotation;
+        Vector3 shootingForward = -player.visualsPivot.up;
+        Vector3 shootingUp = player.visualsPivot.forward;
+        Quaternion shootingRotation = Quaternion.LookRotation(shootingForward, shootingUp);
+        SetField(visuals, "rotationSpeed", 5f);
+
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, shootingRotation), Is.InRange(1f, 89f));
+        float previousAngle = Quaternion.Angle(player.visualsPivot.rotation, shootingRotation);
+        for (int i = 0; i < 120; i++)
+        {
+            visuals.FixedUpdateController();
+            float angle = Quaternion.Angle(player.visualsPivot.rotation, shootingRotation);
+            Assert.That(angle, Is.LessThanOrEqualTo(previousAngle + 0.05f));
+            previousAngle = angle;
+        }
+        AssertVector(player.visualsPivot.forward, shootingForward);
+        AssertVector(player.visualsPivot.up, shootingUp);
+
+        playerControls.AttackPressed = false;
+        player.animator.Update(0.2f);
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingNonTargetedForwardState));
+        player.animator.Update(5f);
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(player.IsFlyingShooting, Is.False);
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingNonTargetedDownwardState));
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, downwardRotation), Is.InRange(1f, 89f));
+        for (int i = 0; i < 120; i++)
+            visuals.FixedUpdateController();
+        AssertVector(player.visualsPivot.forward, downwardRotation * Vector3.forward);
+        AssertVector(player.visualsPivot.up, downwardRotation * Vector3.up);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void NonTargetedFlightWithNoMovementKeepsItsRotation(bool faceForward)
+    {
+        player.visualsPivot.rotation = Quaternion.Euler(23f, 47f, 81f);
+        Quaternion before = player.visualsPivot.rotation;
+        visuals.RotateToFacing3Dv2(Vector3.zero, cameraTransform.forward, cameraTransform.up, faceForward);
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, before), Is.LessThan(0.01f));
+    }
+
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    [TestCase(true, true)]
+    public void FlyingGunshotFacesTargetForwardWithMovementUpThenRestoresDownward(bool selectDuringShot, bool withoutCamera)
+    {
+        PrepareFlyingAttack(true, 1);
+        player.visualsPivot.position = new Vector3(23f, -11f, 17f);
+        cameraTransform.rotation = Quaternion.Euler(135f, 37f, 65f);
+        playerControls.Move = new Vector2(1f, 1f).normalized;
+        playerControls.JumpPressed = true;
+        Transform target = Child("Shooting target");
+        target.position = player.visualsPivot.position + new Vector3(8f, 12f, 5f);
+        visuals.target = selectDuringShot ? null : target.gameObject;
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(selectDuringShot ? (AbstractPlayerVisualsRotationState)visuals.FlyingNonTargetedDownwardState
+                : visuals.FlyingTargetedDownwardState));
+
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(player.IsFlyingShooting, Is.True);
+        if (selectDuringShot)
+            visuals.target = target.gameObject;
+        if (withoutCamera)
+            SetField(player, "directionPointer", null);
+
+        foreach (Vector3 offset in new[] { new Vector3(8f, 12f, 5f), new Vector3(-7f, -3f, 9f) })
+        {
+            target.position = player.visualsPivot.position + offset;
+            visuals.FixedUpdateController();
+            Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+                Is.SameAs(visuals.FlyingTargetedForwardState));
+            AssertVector(player.visualsPivot.forward, offset.normalized);
+            AssertVector(player.visualsPivot.up,
+                Vector3.ProjectOnPlane(player.FlyingMoveFacingDirection, offset.normalized).normalized);
+        }
+
+        // Releasing the button keeps the shot's facing until the animation ends.
+        SetField(player, "directionPointer", camera);
+        playerControls.AttackPressed = false;
+        player.animator.Update(0.2f);
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingTargetedForwardState));
+        player.animator.Update(5f);
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(player.IsFlyingShooting, Is.False);
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingTargetedDownwardState));
+        AssertVector(player.visualsPivot.forward, player.FlyingMoveFacingDirection.normalized);
+        AssertFlightDownToward(target.position);
+    }
+
+    [TestCase(0, false)]
+    [TestCase(1, false)]
+    [TestCase(2, false)]
+    [TestCase(3, false)]
+    [TestCase(4, false)]
+    [TestCase(5, false)]
+    [TestCase(0, true)]
+    [TestCase(1, true)]
+    [TestCase(2, true)]
+    [TestCase(3, true)]
+    [TestCase(4, true)]
+    [TestCase(5, true)]
+    public void FlyingForwardTargetingHonorsMovementWeaponTargetAndFreezeChanges(int change, bool targeted)
+    {
+        PrepareFlyingAttack(true, 1);
+        Transform target = Child("Shooting target");
+        target.position = new Vector3(8f, 12f, 5f);
+        visuals.target = targeted ? target.gameObject : null;
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedForwardState
+                : visuals.FlyingNonTargetedForwardState));
+        AbstractPlayerVisualsRotationState expectedState = targeted
+            ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedDownwardState : visuals.FlyingNonTargetedDownwardState;
+
+        switch (change)
+        {
+            case 0:
+                playerControls.Move = Vector2.zero;
+                player.FlyingMoveState.FixedUpdate();
+                break;
+            case 1:
+                GetField<TogglerOfGameObjectKeySwitch>(player, "handWeaponSwitch").SwitchActive(2);
+                break;
+            case 2:
+                visuals.target = targeted ? null : target.gameObject;
+                expectedState = targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingNonTargetedForwardState
+                    : visuals.FlyingTargetedForwardState;
+                break;
+            case 3:
+                player.SetState(player.FlyingDashState);
+                expectedState = visuals.FlyingNonTargetedDownwardState;
+                break;
+            case 4:
+                visuals.EnterFreezeRotationState(1f);
+                expectedState = visuals.FreezeRotationState;
+                break;
+            case 5:
+                player.SetState(player.IdleState);
+                expectedState = targeted ? (AbstractPlayerVisualsRotationState)visuals.SurfaceTargetedState
+                    : visuals.SurfaceNotTargetedState;
+                break;
+        }
+
+        visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"), Is.SameAs(expectedState));
+        if (change == 0)
+        {
+            Assert.That(player.IsFlyingShooting, Is.True);
+            playerControls.Move = Vector2.up;
+            player.FlyingIdleState.FixedUpdate();
+            visuals.FixedUpdateController();
+            Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+                Is.SameAs(targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedForwardState
+                    : visuals.FlyingNonTargetedForwardState));
+        }
+    }
+
+    [TestCase(0, false)]
+    [TestCase(2, false)]
+    [TestCase(0, true)]
+    [TestCase(2, true)]
+    public void FlyingMeleeAttacksKeepDownwardTargetFacing(int weaponIndex, bool targeted)
+    {
+        PrepareFlyingAttack(true, weaponIndex);
+        visuals.target = targeted ? Child("Melee target").gameObject : null;
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        visuals.FixedUpdateController();
+        Assert.That(player.IsFlyingShooting, Is.False);
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(targeted ? (AbstractPlayerVisualsRotationState)visuals.FlyingTargetedDownwardState
+                : visuals.FlyingNonTargetedDownwardState));
+    }
+
+    [TestCase(-10f)]
+    [TestCase(0f)]
+    [TestCase(10f)]
+    public void FlyingForwardTargetingKeepsStableRollAlongMovementAndAtCoincidentTarget(float targetDistance)
+    {
+        PrepareFlyingAttack(true, 1);
+        playerControls.Move = Vector2.right;
+        playerControls.AttackPressed = true;
+        player.FlyingMoveState.FixedUpdate();
+        Vector3 forward = targetDistance < 0f ? Vector3.left : Vector3.right;
+        player.visualsPivot.rotation = Quaternion.LookRotation(forward, new Vector3(0f, 1f, 1f).normalized);
+        Transform target = Child("Collinear shooting target");
+        target.position = player.visualsPivot.position + Vector3.right * targetDistance;
+        visuals.target = target.gameObject;
+        SetField(player, "directionPointer", null);
+        SetField(visuals, "rotationSpeed", 1f / Time.fixedDeltaTime);
+        Quaternion before = player.visualsPivot.rotation;
+        for (int i = 0; i < 5; i++)
+            visuals.FixedUpdateController();
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.FlyingTargetedForwardState));
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, before), Is.LessThan(0.01f));
+    }
+
     [TestCase(false)]
     [TestCase(true)]
     public void ChangingFlyingMovementDoesNotRestartShooting(bool initiallyMoving)
@@ -1712,6 +2151,98 @@ public class FlyingStateTests
         AssertVector(cameraTransform.position, pivot.position + cameraTransform.forward * 0.5f);
     }
 
+    [TestCase(30, false, false)]
+    [TestCase(30, true, false)]
+    [TestCase(120, false, false)]
+    [TestCase(120, true, false)]
+    [TestCase(30, false, true)]
+    [TestCase(30, true, true)]
+    [TestCase(120, false, true)]
+    [TestCase(120, true, true)]
+    public void AimCameraTransitionsKeepMovingPlayerCentered(int framesPerSecond, bool turnCamera, bool flying)
+    {
+        SetupAimingWeapons(1);
+        if (flying)
+            cameraTransform.rotation = Quaternion.Euler(135f, 37f, 65f);
+        player.SetState(flying ? (AbstractPlayerState)player.FlyingMoveState : player.RunState);
+        playerControls.Move = Vector2.right;
+        AbstractCameraState normalCamera = flying ? (AbstractCameraState)camera.LookAtFlyingCameraState : camera.LookAtCameraState;
+        AbstractCameraState aimCamera = flying ? (AbstractCameraState)camera.FirstPersonFlyingCameraState : camera.FirstPersonCameraState;
+        camera.SetState(normalCamera);
+        player.UpdateFlyingMoveInput();
+        visuals.FixedUpdateController();
+        SetField(camera, "lookAtSmoothDuration", 1f);
+        float deltaTime = 1f / framesPerSecond;
+        float physicsTime = 0f;
+
+        for (int transition = 0; transition < 4; transition++)
+        {
+            bool aiming = transition % 2 == 0;
+            playerControls.AimPressed = aiming;
+            Vector3 beforeTransition = cameraTransform.position;
+            player.UpdateAiming();
+            AssertVector(cameraTransform.position, beforeTransition);
+            Assert.That(camera.CurrentState, Is.SameAs(aiming ? aimCamera : normalCamera));
+            Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"), Is.SameAs(flying
+                ? (AbstractPlayerVisualsRotationState)visuals.FlyingNonTargetedDownwardState
+                : aiming ? visuals.GroundLikeCameraFacingState : visuals.SurfaceNotTargetedState));
+
+            // Interrupt the first two blends with another RMB change, then let each camera settle.
+            int frameCount = transition < 2 ? framesPerSecond / 4 : framesPerSecond * 2;
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                physicsTime += deltaTime;
+                while (physicsTime >= Time.fixedDeltaTime)
+                {
+                    Vector3 movement = cameraTransform.right * (RunState.MoveSpeed * Time.fixedDeltaTime);
+                    pivot.position += movement;
+                    player.visualsPivot.position += movement;
+                    visuals.FixedUpdateController();
+                    physicsTime -= Time.fixedDeltaTime;
+                }
+
+                player.UpdateAiming();
+                sourceControls.Look = turnCamera ? new Vector2(180f * deltaTime, 30f * deltaTime) : Vector2.zero;
+                if (flying)
+                    ((LookAtFlyingCameraState)camera.CurrentState).Update(deltaTime);
+                else
+                    ((LookAtCameraState)camera.CurrentState).Update(deltaTime);
+                if (aiming && !flying)
+                    visuals.GroundLikeCameraFacingState.LateUpdate(deltaTime);
+
+                Vector3 pivotInCameraSpace = cameraTransform.InverseTransformPoint(pivot.position);
+                Assert.That(new Vector2(pivotInCameraSpace.x, pivotInCameraSpace.y).magnitude,
+                    Is.LessThan(0.0001f), $"Camera drifted off the moving player during transition {transition}, frame {frame}.");
+            }
+
+            if (transition >= 2)
+                AssertVector(cameraTransform.position, pivot.position - cameraTransform.forward * (aiming ? -0.5f : 2f));
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void AerialNormalizingCameraKeepsMovingPivotCentered(bool fromFirstPerson)
+    {
+        cameraTransform.rotation = Quaternion.Euler(125f, 37f, 65f);
+        camera.SetState(fromFirstPerson ? CameraController.CameraStateKind.FirstPersonFlying : CameraController.CameraStateKind.LookAtFlying);
+        SetField(camera, "lookAtSmoothDuration", 1f);
+        camera.SetState(camera.LookAtFlyingNormalizingCameraState);
+        for (int frame = 0; frame < 60; frame++)
+        {
+            pivot.position += new Vector3(0.1f, -0.05f, 0.07f);
+            if (camera.CurrentState == camera.LookAtFlyingNormalizingCameraState)
+                camera.LookAtFlyingNormalizingCameraState.Update(1f / 60f);
+            else
+                camera.LookAtFlyingCameraState.Update(1f / 60f);
+            Vector3 pivotInCameraSpace = cameraTransform.InverseTransformPoint(pivot.position);
+            Assert.That(new Vector2(pivotInCameraSpace.x, pivotInCameraSpace.y).magnitude, Is.LessThan(0.0001f));
+        }
+        Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtFlyingCameraState));
+        AssertVector(cameraTransform.position, pivot.position - cameraTransform.forward * 2f);
+        AssertVector(cameraTransform.up, Vector3.up);
+    }
+
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
@@ -1751,6 +2282,105 @@ public class FlyingStateTests
             ? (AbstractCameraState)camera.LookAtFlyingCameraState : camera.LookAtCameraState));
     }
 
+    [TestCase(0, false)]
+    [TestCase(0, true)]
+    [TestCase(1, false)]
+    [TestCase(1, true)]
+    [TestCase(2, false)]
+    [TestCase(2, true)]
+    public void GroundGunAimFacesCameraHorizontallyAndRestoresFacingWhenItEnds(int stateIndex, bool targeted)
+    {
+        var weapons = SetupAimingWeapons(1);
+        AbstractPlayerState state = GetAimingState(stateIndex);
+        player.SetState(state);
+        playerControls.Move = stateIndex == 0 ? Vector2.zero : Vector2.down;
+        SetField(visuals, "rotationSpeed", 1000000f);
+        if (targeted)
+        {
+            visuals.target = Child("Facing target").gameObject;
+            visuals.target.transform.position = player.visualsPivot.position + Vector3.left * 10f;
+        }
+
+        visuals.SetState(visuals.GetDefaultState());
+        playerControls.AimPressed = true;
+        state.Update();
+        Assert.That(camera.CurrentState, Is.SameAs(camera.FirstPersonCameraState));
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"),
+            Is.SameAs(visuals.GroundLikeCameraFacingState), "Facing must switch with the camera, before the next physics tick.");
+
+        foreach (float pitch in new[] { -75f, 65f })
+        {
+            cameraTransform.rotation = Quaternion.Euler(pitch, 120f, 25f);
+            visuals.FixedUpdateController();
+            visuals.GroundLikeCameraFacingState.LateUpdate(1f / 120f);
+            AssertVector(player.visualsPivot.forward, Quaternion.Euler(0f, 120f, 0f) * Vector3.forward);
+            AssertVector(player.visualsPivot.up, Vector3.up);
+        }
+
+        playerControls.AimPressed = false;
+        state.Update();
+        Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtCameraState));
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"), Is.SameAs(targeted
+            ? (AbstractPlayerVisualsRotationState)visuals.SurfaceTargetedState : visuals.SurfaceNotTargetedState));
+
+        playerControls.AimPressed = true;
+        state.Update();
+        weapons.SwitchActive(2);
+        state.Update();
+        Assert.That(camera.CurrentState, Is.SameAs(camera.LookAtCameraState));
+        Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState"), Is.SameAs(targeted
+            ? (AbstractPlayerVisualsRotationState)visuals.SurfaceTargetedState : visuals.SurfaceNotTargetedState));
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public void GroundGunAimFollowsCameraBetweenPhysicsTicks(int stateIndex)
+    {
+        SetupAimingWeapons(1);
+        playerControls.AimPressed = true;
+        player.SetState(GetAimingState(stateIndex));
+        player.UpdateAiming();
+        SetField(visuals, "rotationSpeed", 1000000f);
+
+        foreach (float yaw in new[] { 15f, 40f, 65f })
+        {
+            cameraTransform.rotation = Quaternion.Euler(35f, yaw, 0f);
+            // Render frames can run without a physics tick between them.
+            visuals.GroundLikeCameraFacingState.LateUpdate(1f / 120f);
+            AssertVector(player.visualsPivot.forward, Quaternion.Euler(0f, yaw, 0f) * Vector3.forward);
+            AssertVector(player.visualsPivot.up, Vector3.up);
+        }
+    }
+
+    [Test]
+    public void GroundGunAimPhysicsTicksDoNotAddExtraRotation()
+    {
+        SetupAimingWeapons(1);
+        playerControls.AimPressed = true;
+        player.UpdateAiming();
+        cameraTransform.rotation = Quaternion.Euler(20f, 90f, 0f);
+        Quaternion beforePhysics = player.visualsPivot.rotation;
+        for (int i = 0; i < 3; i++)
+            visuals.FixedUpdateController();
+        Assert.That(Quaternion.Angle(player.visualsPivot.rotation, beforePhysics), Is.LessThan(0.001f));
+    }
+
+    [TestCase(30)]
+    [TestCase(120)]
+    public void GroundGunAimSmoothingDoesNotDependOnRenderRate(int framesPerSecond)
+    {
+        SetupAimingWeapons(1);
+        playerControls.AimPressed = true;
+        player.UpdateAiming();
+        cameraTransform.rotation = Quaternion.Euler(20f, 90f, 0f);
+        for (int frame = 0; frame < framesPerSecond; frame++)
+            visuals.GroundLikeCameraFacingState.LateUpdate(1f / framesPerSecond);
+
+        float expectedYaw = 90f * (1f - Mathf.Exp(-visuals.RotationSpeed));
+        Assert.That(Mathf.DeltaAngle(player.visualsPivot.eulerAngles.y, expectedYaw), Is.EqualTo(0f).Within(0.005f));
+    }
+
     [Test]
     public void AimingSurvivesMovementJumpingFallingShootingAndFlightTransitions()
     {
@@ -1778,6 +2408,9 @@ public class FlyingStateTests
             Assert.That(camera.CurrentState, Is.SameAs(player.IsFlying
                 ? (AbstractCameraState)camera.FirstPersonFlyingCameraState : camera.FirstPersonCameraState));
             AssertVector(cameraTransform.position, pivot.position + cameraTransform.forward * 0.5f);
+            bool groundAiming = stateIndex == 0 || stateIndex == 1 || stateIndex == 2 || stateIndex == 8;
+            Assert.That(GetField<AbstractPlayerVisualsRotationState>(visuals, "currentState")
+                == visuals.GroundLikeCameraFacingState, Is.EqualTo(groundAiming));
         }
 
         Assert.That(groundCamera.EnterCount, Is.Zero, "Aiming must not briefly enter the third-person ground camera.");
@@ -1990,6 +2623,13 @@ public class FlyingStateTests
     private static void AssertVector(Vector3 actual, Vector3 expected)
     {
         Assert.That(Vector3.Distance(actual, expected), Is.LessThan(0.0001f));
+    }
+
+    private void AssertFlightDownToward(Vector3 targetPosition)
+    {
+        Vector3 targetDown = Vector3.ProjectOnPlane(
+            targetPosition - player.visualsPivot.position, player.visualsPivot.forward).normalized;
+        AssertVector(-player.visualsPivot.up, targetDown);
     }
 
     private static void SetField(object target, string name, object value)

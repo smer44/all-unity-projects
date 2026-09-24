@@ -51,3 +51,6 @@ MonoBehaviour:
   runToggle:
     keyboardKey: 53
     mouseButton: 0
+  flyingDash:
+    keyboardKey: 53
+    mouseButton: 0

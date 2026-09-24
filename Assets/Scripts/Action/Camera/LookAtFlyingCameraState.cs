@@ -24,10 +24,15 @@ public class LookAtFlyingCameraState : AbstractCameraState
             ? Vector3.Dot(CameraPivot.position - CameraPosition.position, orbitRotation * Vector3.forward)
             : DistanceToPivot;
         smoothTimeRemaining = Controller.LookAtSmoothDuration;
-        ApplyCameraOrbit();
+        ApplyCameraOrbit(0f);
     }
 
     public override void Update()
+    {
+        Update(Time.deltaTime);
+    }
+
+    public void Update(float deltaTime)
     {
         if (CameraPivot == null || CameraPosition == null)
         {
@@ -38,10 +43,10 @@ public class LookAtFlyingCameraState : AbstractCameraState
             ? Controller.ButtonControls.GetMouseMove2D()
             : Vector2.zero;
         orbitRotation = CameraFacingCalc.RotateOrbitLocal(orbitRotation, lookDelta, LookSensitivity);
-        ApplyCameraOrbit();
+        ApplyCameraOrbit(deltaTime);
     }
 
-    private void ApplyCameraOrbit()
+    private void ApplyCameraOrbit(float deltaTime)
     {
         if (CameraPivot == null || CameraPosition == null)
         {
@@ -51,8 +56,8 @@ public class LookAtFlyingCameraState : AbstractCameraState
         if (smoothTimeRemaining > 0f)
         {
             orbitDistance = Mathf.Lerp(
-                orbitDistance, DistanceToPivot, 1f - Mathf.Exp(-Sharpness * Time.deltaTime));
-            smoothTimeRemaining -= Time.deltaTime;
+                orbitDistance, DistanceToPivot, 1f - Mathf.Exp(-Sharpness * deltaTime));
+            smoothTimeRemaining = Mathf.Max(0f, smoothTimeRemaining - deltaTime);
         }
         else
         {

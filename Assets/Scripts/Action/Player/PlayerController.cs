@@ -105,10 +105,13 @@ public class PlayerController : MonoBehaviour
     public bool IsFlyingMoving => currentState is FlyingMoveState;
     public bool IsFlyingDashing => currentState is FlyingDashState;
     public bool IsFlying => IsFlyingIdle || IsFlyingMoving || IsFlyingDashing || IsAerialEvading;
+    public bool IsFlyingShooting => IsFlying && IsGunSelected() && flyingAttackAnimationName == "Shoot";
     public bool IsTargeted => visualsRotationController != null && visualsRotationController.IsTargeted;
     public bool IsAiming => PlayerCameraController != null
         && (PlayerCameraController.CurrentState is FirstPersonCameraState
             || PlayerCameraController.CurrentState is FirstPersonFlyingCameraState);
+    public bool IsGroundAiming => IsAiming
+        && (currentState is IdleState || currentState is WalkState || currentState is RunState);
     private bool CanAim => currentState != null && currentState.AllowsAiming
         && IsGunSelected() && buttonControls != null && buttonControls.IsAimButtonPressed();
     private CameraController flightCameraController;
@@ -500,12 +503,7 @@ public class PlayerController : MonoBehaviour
     public void UpdateAiming()
     {
         CameraController camera = PlayerCameraController;
-        if (camera == null)
-        {
-            return;
-        }
-
-        if (!CanAim)
+        if (camera == null || !CanAim)
         {
             StopAiming();
             return;
@@ -514,6 +512,8 @@ public class PlayerController : MonoBehaviour
         camera.SetState(IsFlying
             ? (AbstractCameraState)camera.FirstPersonFlyingCameraState
             : camera.FirstPersonCameraState);
+        // Change facing in the same update that switches the aiming camera.
+        visualsRotationController?.UpdateAimingState();
     }
 
     public void StopAiming()
@@ -525,6 +525,8 @@ public class PlayerController : MonoBehaviour
                 ? (AbstractCameraState)camera.LookAtFlyingCameraState
                 : camera.LookAtCameraState);
         }
+
+        visualsRotationController?.UpdateAimingState();
     }
 
     public int GetActiveWeaponIndex()
@@ -617,7 +619,8 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateRunWalkMode()
     {
-        if (buttonControls == null)
+        // Left Alt controls dash during flight and must not change ground locomotion mode.
+        if (buttonControls == null || IsFlying)
         {
             return;
         }
@@ -684,7 +687,7 @@ public class PlayerController : MonoBehaviour
             && buttonControls != null && buttonControls.WasFlyingDashPressed())
         {
             UpdateFlyingMoveInput();
-            // Space counts as active flight even if pressed in the same frame as dash.
+            // Ascent or descent counts as active flight even if pressed in the same frame as dash.
             // Otherwise, hovering retains its backwards dash entry.
             FlyingDashState.Begin(currentState == FlyingIdleState && MoveInputRaw3D.y == 0f
                 ? Vector3.back : MoveInputRaw3D);

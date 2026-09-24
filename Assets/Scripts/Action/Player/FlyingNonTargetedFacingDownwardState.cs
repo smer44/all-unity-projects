@@ -1,8 +1,8 @@
 using UnityEngine;
 
-public class FlyingNotTargetedFacingState : AbstractPlayerVisualsRotationState
+public class FlyingNonTargetedFacingDownwardState : AbstractPlayerVisualsRotationState
 {
-    public FlyingNotTargetedFacingState(PlayerVisualsRotationController controller) : base(controller)
+    public FlyingNonTargetedFacingDownwardState(PlayerVisualsRotationController controller) : base(controller)
     {
     }
 
@@ -20,7 +20,7 @@ public class FlyingNotTargetedFacingState : AbstractPlayerVisualsRotationState
 
         if (Controller.IsTargeted && !player.IsFlyingDashing)
         {
-            Controller.SetState(Controller.FlyingTargetedState);
+            Controller.SetState(Controller.GetDefaultState());
             return;
         }
 
@@ -30,14 +30,12 @@ public class FlyingNotTargetedFacingState : AbstractPlayerVisualsRotationState
             return;
         }
 
-        Vector3 cameraUp = player.Direction != null ? player.Direction.up : Vector3.up;
-        // Moving flight faces WASD input, ignoring Space's camera-relative ascent.
+        // Moving flight uses the movement direction cached for this physics step.
         Vector3 facing = player.IsFlyingDashing ? player.FlyingDashState.MovementDirection
             : player.IsFlyingMoving ? player.FlyingMoveFacingDirection : player.FlyingVelocity;
 
-        //Controller.RotateToFacing3D(facing, cameraUp);
         Transform cameraTransform = player.PlayerCameraController.GetDirection();
-        Controller.RotateToFacing3Dv2(facing,cameraTransform.forward,cameraTransform.up );
+        Controller.RotateToFacing3Dv2(facing, cameraTransform.forward, cameraTransform.up);
     }
 
     public override void OnExit()

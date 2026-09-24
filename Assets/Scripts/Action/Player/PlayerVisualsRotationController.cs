@@ -12,8 +12,11 @@ public class PlayerVisualsRotationController : MonoBehaviour
     public SurfaceNotTargetedFacingState SurfaceNotTargetedState { get; private set; }
     public WaterNotTargetedFacingState WaterNotTargetedState { get; private set; }
     public SurfaceTargetedFacingState SurfaceTargetedState { get; private set; }
-    public FlyingNotTargetedFacingState FlyingNotTargetedState { get; private set; }
-    public FlyingTargetedFacingState FlyingTargetedState { get; private set; }
+    public GroundLikeCameraFacingState GroundLikeCameraFacingState { get; private set; }
+    public FlyingNonTargetedFacingDownwardState FlyingNonTargetedDownwardState { get; private set; }
+    public FlyingNonTargetedFacingForwardState FlyingNonTargetedForwardState { get; private set; }
+    public FlyingTargetedFacingDownwardState FlyingTargetedDownwardState { get; private set; }
+    public FlyingTargetedFacingForwardState FlyingTargetedForwardState { get; private set; }
     public FreezeRotationState FreezeRotationState { get; private set; }
 
     public PlayerController PlayerController => playerController;
@@ -30,8 +33,11 @@ public class PlayerVisualsRotationController : MonoBehaviour
         SurfaceNotTargetedState = new SurfaceNotTargetedFacingState(this);
         WaterNotTargetedState = new WaterNotTargetedFacingState(this);
         SurfaceTargetedState = new SurfaceTargetedFacingState(this);
-        FlyingNotTargetedState = new FlyingNotTargetedFacingState(this);
-        FlyingTargetedState = new FlyingTargetedFacingState(this);
+        GroundLikeCameraFacingState = new GroundLikeCameraFacingState(this);
+        FlyingNonTargetedDownwardState = new FlyingNonTargetedFacingDownwardState(this);
+        FlyingNonTargetedForwardState = new FlyingNonTargetedFacingForwardState(this);
+        FlyingTargetedDownwardState = new FlyingTargetedFacingDownwardState(this);
+        FlyingTargetedForwardState = new FlyingTargetedFacingForwardState(this);
         FreezeRotationState = new FreezeRotationState(this);
     }
 
@@ -57,13 +63,14 @@ public class PlayerVisualsRotationController : MonoBehaviour
             return;
         }
 
-        bool isFlyingState = currentState == FlyingNotTargetedState || currentState == FlyingTargetedState;
+        UpdateAimingState();
+
+        bool isFlyingState = currentState == FlyingNonTargetedDownwardState || currentState == FlyingNonTargetedForwardState
+            || currentState == FlyingTargetedDownwardState || currentState == FlyingTargetedForwardState;
         if (playerController != null && playerController.IsFlying)
         {
-            if (!isFlyingState || playerController.IsFlyingDashing)
-            {
-                SetState(GetDefaultState());
-            }
+            // Apply target and shooting changes before updating facing, including while hovering.
+            SetState(GetDefaultState());
         }
         else if (currentState == null || isFlyingState)
         {
@@ -83,6 +90,20 @@ public class PlayerVisualsRotationController : MonoBehaviour
         currentState?.OnExit();
         currentState = newState;
         currentState.OnEnter();
+    }
+
+    public void UpdateAimingState()
+    {
+        if (currentState == FreezeRotationState && currentState != null)
+        {
+            return;
+        }
+
+        AbstractPlayerVisualsRotationState defaultState = GetDefaultState();
+        if (defaultState == GroundLikeCameraFacingState || currentState == GroundLikeCameraFacingState)
+        {
+            SetState(defaultState);
+        }
     }
 
     public void EnterFreezeRotationState(float duration)
@@ -109,12 +130,24 @@ public class PlayerVisualsRotationController : MonoBehaviour
     {
         if (playerController != null && playerController.IsFlying)
         {
-            return IsTargeted && !playerController.IsFlyingDashing ? FlyingTargetedState : FlyingNotTargetedState;
+            if (playerController.IsFlyingDashing)
+                return FlyingNonTargetedDownwardState;
+
+            bool shootingWhileMoving = playerController.IsFlyingMoving && playerController.IsFlyingShooting;
+            if (IsTargeted)
+                return shootingWhileMoving ? FlyingTargetedForwardState : FlyingTargetedDownwardState;
+
+            return shootingWhileMoving ? FlyingNonTargetedForwardState : FlyingNonTargetedDownwardState;
         }
 
         if (playerController != null && playerController.IsInWater())
         {
             return WaterNotTargetedState;
+        }
+
+        if (playerController != null && playerController.IsGroundAiming)
+        {
+            return GroundLikeCameraFacingState;
         }
 
         return IsTargeted ? SurfaceTargetedState : SurfaceNotTargetedState;
@@ -162,53 +195,72 @@ public class PlayerVisualsRotationController : MonoBehaviour
             rotationSpeed);
     }
 
-            //if(cameraTransform. y < 0)
-        //{
-        //    referenceUp = - referenceUp;
-        //}
-
-        //Quaternion cameraForwardQ = Quaternion.LookRotation(cameraTransform, Vector3.forward);
-
-    public void RotateToFacing3Dv2(Vector3 rotatedFacing, Vector3 cameraForward, Vector3 cameraUp)
+    public void RotateToFacing3Dv2(Vector3 rotatedFacing, Vector3 cameraForward, Vector3 cameraUp, bool faceForward = false)
     {
-         Vector3 cameraBack = -cameraForward;        
+        if (playerController == null || playerController.visualsPivot == null || rotatedFacing.sqrMagnitude < 0.0001f)
+            return;
 
+        Vector3 cameraBack = -cameraForward;
         float alignment = Mathf.Abs(Vector3.Dot(rotatedFacing.normalized, cameraForward));
         Vector3 referenceUp = Vector3.Slerp(cameraBack, cameraUp, alignment).normalized;
 
-        if (Vector3.Dot(cameraUp, Vector3.up) < 0){
-            //Makes no effect : 
-            //referenceUp.y = - referenceUp.y;
+        if (faceForward)
+        {
+            // Exchange axes from the same desired flight orientation: its down
+            // becomes shooting forward, and its movement-facing forward becomes up.
+            Quaternion movementRotation = Quaternion.LookRotation(rotatedFacing.normalized, referenceUp);
+            referenceUp = rotatedFacing.normalized;
+            rotatedFacing = movementRotation * Vector3.down;
+        }
 
-        } // Check if camera is upside down
-
-        
-        
         FacingCalc.RotateToFacing3D(
             playerController.visualsPivot,
             rotatedFacing,
             referenceUp,
             rotationSpeed);
-
-        
-
-
     }
 
 
     public void RotateToFacing3DTargetedUpwardsChange(Vector3 rotatedFacing, Vector3 targetPosition, Vector3 cameraUp)
     {
-        //if (playerController == null || playerController.visualsPivot == null)
-        //   return;
+        if (playerController == null || playerController.visualsPivot == null || rotatedFacing.sqrMagnitude < 0.0001f)
+            return;
 
-        Vector3 directionToTarget = targetPosition - playerController.visualsPivot.position;
+        Transform visuals = playerController.visualsPivot;
+        Vector3 directionToTarget = targetPosition - visuals.position;
+        // Forward must stay along movement. Roll points down toward the target's
+        // projection onto the plane perpendicular to that forward direction.
+        RotateToFacing3DWithStableUp(visuals, rotatedFacing, -directionToTarget, cameraUp);
+    }
 
+    public void RotateToFacing3DTargetedForward(Vector3 movementDirection, Vector3 targetPosition, Vector3 cameraUp)
+    {
+        if (playerController == null || playerController.visualsPivot == null)
+            return;
+
+        Transform visuals = playerController.visualsPivot;
+        Vector3 directionToTarget = targetPosition - visuals.position;
         if (directionToTarget.sqrMagnitude < 0.0001f)
             return;
 
-        directionToTarget.Normalize();
+        // Targeting owns forward; movement determines roll through the up axis.
+        RotateToFacing3DWithStableUp(visuals, directionToTarget, movementDirection, cameraUp);
+    }
 
-        RotateToFacing3Dv2(rotatedFacing, directionToTarget,cameraUp);
+    private void RotateToFacing3DWithStableUp(Transform visuals, Vector3 facing, Vector3 desiredUp, Vector3 cameraUp)
+    {
+        Vector3 forward = facing.normalized;
+        Vector3 referenceUp = Vector3.ProjectOnPlane(desiredUp.normalized, forward);
+        if (referenceUp.sqrMagnitude < 0.0001f)
+        {
+            // Parallel or missing directions cannot determine roll. Keep the current
+            // up axis where possible, then fall back to the camera or a world axis.
+            referenceUp = Vector3.ProjectOnPlane(visuals.up, forward);
+            if (referenceUp.sqrMagnitude < 0.0001f)
+                referenceUp = FacingCalc.GetReferenceForwardByUp(forward, cameraUp);
+        }
+
+        FacingCalc.RotateToFacing3D(visuals, forward, referenceUp.normalized, rotationSpeed);
     }
 
 
