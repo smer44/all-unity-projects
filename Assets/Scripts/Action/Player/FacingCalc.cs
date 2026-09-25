@@ -2,6 +2,13 @@ using UnityEngine;
 
 public static class FacingCalc
 {
+    public static float GetPlanarDirectionDot(Vector3 firstDirection, Vector3 secondDirection)
+    {
+        firstDirection.y = 0f;
+        secondDirection.y = 0f;
+        return Vector3.Dot(firstDirection.normalized, secondDirection.normalized);
+    }
+
     public static void RotateToFacing3D(
         Transform visualsPivot, Vector3 movementDirection, Vector3 referenceUp, float speed)
     {

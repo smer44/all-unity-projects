@@ -106,6 +106,7 @@ public class PlayerController : MonoBehaviour
     public bool IsFlyingDashing => currentState is FlyingDashState;
     public bool IsFlying => IsFlyingIdle || IsFlyingMoving || IsFlyingDashing || IsAerialEvading;
     public bool IsFlyingShooting => IsFlying && IsGunSelected() && flyingAttackAnimationName == "Shoot";
+    public bool IsGroundRunning => currentState != null && currentState == RunState;
     public bool IsTargeted => visualsRotationController != null && visualsRotationController.IsTargeted;
     public bool IsAiming => PlayerCameraController != null
         && (PlayerCameraController.CurrentState is FirstPersonCameraState
@@ -173,6 +174,7 @@ public class PlayerController : MonoBehaviour
     public TogglerOfGameObjectKeySwitch HandWeaponSwitch => handWeaponSwitch;
     public PlayerVisualsRotationController VisualsRotationController => visualsRotationController;
     public UpperBodyVisualsController UpperBodyVisualsController => upperBodyVisualsController;
+    public PlayerVisualsShootingTweaks ShootingTweaks { get; private set; }
     public Transform Direction => GetFacingDirectionTransform();
     public Rigidbody PlayerBody => playerBody;
     private Transform GroundParent;
@@ -226,6 +228,11 @@ public class PlayerController : MonoBehaviour
         if (upperBodyVisualsController == null)
             upperBodyVisualsController = gameObject.AddComponent<UpperBodyVisualsController>();
         upperBodyVisualsController.Initialize(this);
+
+        ShootingTweaks = GetComponent<PlayerVisualsShootingTweaks>();
+        if (ShootingTweaks == null)
+            ShootingTweaks = gameObject.AddComponent<PlayerVisualsShootingTweaks>();
+        ShootingTweaks.Initialize(this);
 
         waterLayer = LayerMask.NameToLayer("Water");
 

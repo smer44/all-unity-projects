@@ -2114,6 +2114,7 @@ GameObject:
   - component: {fileID: 1369932787248649913}
   - component: {fileID: 5378336096252629190}
   - component: {fileID: 6390189045729912601}
+  - component: {fileID: 6982453193247058073}
   - component: {fileID: 1701901311978961517}
   - component: {fileID: 3509162150898622482}
   - component: {fileID: 2487131916403282659}
@@ -2195,6 +2196,25 @@ MonoBehaviour:
   stabDuration: 1.2
   stabFollowUpDuration: 0.8
   shootDuration: 0.9
+--- !u!114 &6982453193247058073
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8256452486073622322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fdc31b859ad84c9698dc510b6d7d070b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerVisualsShootingTweaks
+  spineBones:
+  - {fileID: 3883347188535599457}
+  - {fileID: 5280854591511852522}
+  - {fileID: 387592936250771431}
+  rightStrafeAngle: 0
+  straightAngle: 78
+  leftStrafeAngle: 153
 --- !u!136 &1701901311978961517
 CapsuleCollider:
   m_ObjectHideFlags: 0

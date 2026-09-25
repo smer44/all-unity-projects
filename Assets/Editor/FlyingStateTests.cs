@@ -2754,6 +2754,103 @@ public class UpperBodyVisualsControllerTests
         Object.DestroyImmediate(sourceControls);
     }
 
+    [TestCase(0f, 1f, 1f)]
+    [TestCase(0f, -1f, -1f)]
+    [TestCase(1f, 0f, 0f)]
+    [TestCase(-1f, 0f, 0f)]
+    [TestCase(1f, 1f, 0.70710678f)]
+    [TestCase(0f, 0f, 0f)]
+    public void PlanarDirectionDotIgnoresHeightAndMagnitude(float x, float z, float expected)
+    {
+        float result = FacingCalc.GetPlanarDirectionDot(new Vector3(0f, 8f, 2f), new Vector3(x * 3f, -20f, z * 3f));
+        Assert.That(result, Is.EqualTo(expected).Within(0.0001f));
+        Assert.That(FacingCalc.GetPlanarDirectionDot(Vector3.up, Vector3.forward), Is.Zero);
+    }
+
+    [TestCase(0f, 1f, 0f, 0f, 0f, 1f)]
+    [TestCase(0f, -1f, 0f, 0f, 0f, -1f)]
+    [TestCase(1f, 0f, 0f, 0f, 1f, 0f)]
+    [TestCase(-1f, 0f, 0f, 0f, -1f, 0f)]
+    [TestCase(1f, 1f, 0f, 0f, 0.70710678f, 0.70710678f)]
+    [TestCase(-1f, -1f, 0f, 0f, -0.70710678f, -0.70710678f)]
+    [TestCase(0f, 1f, 90f, 0f, -1f, 0f)]
+    [TestCase(0f, 1f, 90f, 90f, 0f, 1f)]
+    [TestCase(1f, 0f, 0f, 90f, 0f, -1f)]
+    public void RunningBlendUsesCurrentMovementRelativeToFlatVisualFacing(
+        float x, float z, float visualYaw, float cameraYaw, float expectedRight, float expectedForward)
+    {
+        player.visualsPivot = Child("Visuals").transform;
+        player.visualsPivot.rotation = Quaternion.Euler(35f, visualYaw, 0f);
+        direction.rotation = Quaternion.Euler(55f, cameraYaw, 22f);
+        controls.Move = new Vector2(x, z).normalized;
+        Tick();
+        Assert.That(CurrentState, Is.SameAs(player.RunState));
+        Assert.That(player.animator.GetFloat("VelocityForward"), Is.EqualTo(expectedForward).Within(0.0001f));
+        Assert.That(player.animator.GetFloat("VelocityRight"), Is.EqualTo(expectedRight).Within(0.0001f));
+
+        // Reversing input must update in this tick, rather than reading the old movement cache.
+        controls.Move = -controls.Move;
+        Tick();
+        Assert.That(player.animator.GetFloat("VelocityForward"), Is.EqualTo(-expectedForward).Within(0.0001f));
+        Assert.That(player.animator.GetFloat("VelocityRight"), Is.EqualTo(-expectedRight).Within(0.0001f));
+        player.animator.Update(0.2f);
+        Assert.That(player.animator.GetCurrentAnimatorStateInfo(0).IsName("GroundMoveBlendTree"), Is.True);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void ShootingSpineCorrectionFollowsRunningAndAttackLifetime(bool startIdle)
+    {
+        weapons.SwitchActive(1);
+        controls.Move = startIdle ? Vector2.zero : Vector2.up;
+        player.SetState(startIdle ? (AbstractPlayerState)player.IdleState : player.RunState);
+        controls.Attack = true;
+        Tick();
+        Assert.That(Upper.CurrentState, Is.SameAs(Upper.ShootTweakState));
+        Assert.That(player.ShootingTweaks.IsOn, Is.EqualTo(!startIdle));
+
+        controls.Attack = false;
+        controls.Move = Vector2.up;
+        player.SetState(player.RunState);
+        Assert.That(player.ShootingTweaks.IsOn, Is.True);
+        player.SetState(player.WalkState);
+        Assert.That(player.ShootingTweaks.IsOn, Is.False);
+        player.SetState(player.RunState);
+        Assert.That(player.ShootingTweaks.IsOn, Is.True);
+        player.SetState(player.IdleState);
+        Assert.That(player.ShootingTweaks.IsOn, Is.False);
+        player.SetState(player.RunState);
+        Assert.That(player.ShootingTweaks.IsOn, Is.True);
+
+        for (int i = 0; i < 60 && Upper.IsAttacking; i++)
+            Upper.FixedUpdateController();
+        Assert.That(Upper.IsAttacking, Is.False);
+        Assert.That(player.ShootingTweaks.IsOn, Is.False);
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    public void InterruptingGroundShootingStopsSpineCorrection(int interruption)
+    {
+        BeginAttack(1);
+        Assert.That(player.ShootingTweaks.IsOn, Is.True);
+        switch (interruption)
+        {
+            case 0: player.SetState(player.FlyingIdleState); break;
+            case 1: player.SetState(player.JumpUpState); break;
+            case 2:
+                weapons.SwitchActive(2);
+                Invoke(Upper, "Update");
+                break;
+            case 3:
+                Invoke(Upper, "OnDisable");
+                break;
+        }
+        Assert.That(player.ShootingTweaks.IsOn, Is.False);
+    }
+
     [TestCase(0, 0)]
     [TestCase(0, 1)]
     [TestCase(0, 2)]
@@ -2781,7 +2878,7 @@ public class UpperBodyVisualsControllerTests
         player.animator.Update(0.2f);
         string clip = weapon == 0 ? "Punch" : weapon == 1 ? "Shoot" : "ForwardSwordAttack";
         Assert.That(player.animator.GetCurrentAnimatorStateInfo(UpperLayer).IsName(clip), Is.True);
-        string baseClip = locomotion == 0 ? "Idle" : weapon == 1 && locomotion == 2 ? "Walk" : "Run";
+        string baseClip = locomotion == 0 ? "Idle" : weapon == 1 && locomotion == 2 ? "Walk" : "GroundMoveBlendTree";
         Assert.That(player.animator.GetCurrentAnimatorStateInfo(0).IsName(baseClip), Is.True);
         Assert.That(player.animator.GetLayerWeight(UpperLayer), Is.EqualTo(1f));
         Assert.That(player.animator.speed, Is.EqualTo(1f));
